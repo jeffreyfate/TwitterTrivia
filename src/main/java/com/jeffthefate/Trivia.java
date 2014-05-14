@@ -555,9 +555,23 @@ public class Trivia /*implements UserStreamListener*/ {
 		} catch (TwitterException e) {
 			logger.error("Failed to get timeline: " + e.getMessage());
 			e.printStackTrace();
+			sendDirectMessage(twitterConfig, "Copperpot5",
+					"Error updating status! Check the log");
 		}
 		return status;
 	}
+	
+	private static void sendDirectMessage(Configuration tweetConfig,
+			String screenName, String message) {
+		Twitter twitter = new TwitterFactory(tweetConfig).getInstance();
+		try {
+			twitter.sendDirectMessage(screenName, message);
+		} catch (TwitterException e) {
+			logger.error("Unable to send direct message!");
+			e.printStackTrace();
+		}
+	}
+	
 	/*
 	public void onBlock(User arg0, User arg1) {
 	}
@@ -789,9 +803,6 @@ public class Trivia /*implements UserStreamListener*/ {
 		if (question == null || question.isEmpty()) {
 			return false;
 		}
-		if (!isDev) {
-			markAsTrivia(question.get("objectId"), 0);
-		}
 		sb = new StringBuilder();
 		sb.append(preTweet);
 		sb.append("[");
@@ -844,14 +855,17 @@ public class Trivia /*implements UserStreamListener*/ {
 			} else {
 				try {
 					Thread.sleep(1000);
-				} catch (InterruptedException e) {
-				}
+				} catch (InterruptedException e) {}
 				status = postTweet(tweet, null, currTwitterStatus.get(0));
 			}
 			if (status != null) {
+				if (!isDev) {
+					markAsTrivia(question.get("objectId"), 0);
+				}
 				currTwitterStatus.add(status.getId());
 			}
 			else {
+				totalQuestions--;
 				return false;
 			}
 		}
