@@ -88,6 +88,7 @@ public class Trivia /*implements UserStreamListener*/ {
 	private int mainSize;
 	private int dateSize;
 	private int limit;
+	private int verticalOffset;
 	private StringBuilder sb;
 
 	private static Screenshot screenshot;
@@ -128,8 +129,8 @@ public class Trivia /*implements UserStreamListener*/ {
 	private static Logger logger = Logger.getLogger(Trivia.class);
 
 	public Trivia(String templateFile, String fontFile, String leadersTitle,
-			int mainSize, int dateSize, int limit, Configuration twitterConfig,
-			int questionCount, int bonusCount,
+			int mainSize, int dateSize, int limit, int verticalOffset,
+			Configuration twitterConfig, int questionCount, int bonusCount,
 			ArrayList<ArrayList<String>> nameMap,
 			HashMap<String, String> acronymMap, ArrayList<String> replaceList,
 			ArrayList<String> tipList, boolean isDev, String preTweet,
@@ -140,6 +141,7 @@ public class Trivia /*implements UserStreamListener*/ {
 		this.mainSize = mainSize;
 		this.dateSize = dateSize;
 		this.limit = limit;
+		this.verticalOffset = verticalOffset;
 		this.twitterConfig = twitterConfig;
 		this.questionCount = questionCount;
 		this.bonusCount = bonusCount;
@@ -314,8 +316,8 @@ public class Trivia /*implements UserStreamListener*/ {
 			if (totalQuestions % LEADERS_EVERY == 0) {
 				screenshot = new TriviaScreenshot(templateFile, fontFile,
 						leadersTitle, generateLeaderboard(), mainSize,
-						dateSize, limit);
-				postTweet(preTweet + "Current Top 10",
+						dateSize, limit, verticalOffset);
+				postTweet(preTweet + "Current Top Scores",
 						new File(screenshot.getOutputFilename()), -1);
 			}
 			if (totalQuestions == (questionCount - bonusCount)) {
@@ -490,7 +492,7 @@ public class Trivia /*implements UserStreamListener*/ {
 				break;
 		}
 		screenshot = new TriviaScreenshot(templateFile, fontFile, leadersTitle,
-				sortedMap, mainSize, dateSize, limit);
+				sortedMap, mainSize, dateSize, limit, verticalOffset);
 		postTweet(preTweet + winner, new File(screenshot.getOutputFilename()),
 				-1);
 	}
@@ -786,7 +788,7 @@ public class Trivia /*implements UserStreamListener*/ {
 			// all 1s should be marked as 0s
 			logger.warn("No questions left!");
 			if (!prioritize && !isDev) {
-				markAllAsTrivia(1);
+				markAllAsTrivia(1, true);
 				return false;
 			} else {
 				return false;
@@ -794,7 +796,7 @@ public class Trivia /*implements UserStreamListener*/ {
 		}
 		int skip = ((int) (count * Math.random()));
 		List<Map<String, String>> questionList = getQuestion(prioritize,
-				isLightning, false, 1, skip);
+				isLightning, false, 1, skip, 0);
 		if (!questionList.isEmpty()) {
 			question = questionList.get(0);
 		} else {
@@ -861,6 +863,15 @@ public class Trivia /*implements UserStreamListener*/ {
 			if (status != null) {
 				if (!isDev) {
 					markAsTrivia(question.get("objectId"), 0);
+					// Start resetting the questions early
+					if (!prioritize && count <= 50) {
+						Thread markThread = new Thread() {
+							public void run() {
+								markAllAsTrivia(2, false);
+							}
+						};
+						markThread.start();
+					}
 				}
 				currTwitterStatus.add(status.getId());
 			}
@@ -874,7 +885,7 @@ public class Trivia /*implements UserStreamListener*/ {
 	}
 
 	private static List<Map<String, String>> getQuestion(boolean prioritize,
-			boolean lightning, boolean reset, int limit, int skip) {
+			boolean lightning, boolean reset, int limit, int skip, int level) {
 		logger.info("Getting question (prioritize: " + prioritize
 				+ ", lightning: " + lightning + ", reset: " + reset
 				+ ", limit: " + limit + ", skip: " + skip);
@@ -883,9 +894,7 @@ public class Trivia /*implements UserStreamListener*/ {
 		HttpResponse response = null;
 		String responseString = null;
 		String url = "https://api.parse.com/1/classes/Question?";
-		if (skip >= 0) {
-			url += ("skip=" + skip);
-		}
+		url += ("skip=" + skip);
 		url += ("&limit=" + limit);
 		url += "&order=updatedAt";
 		if (lightning) {
@@ -895,7 +904,11 @@ public class Trivia /*implements UserStreamListener*/ {
 					+ "Lyrics%22%2C%22Scramble%22%5D%7D%7D");
 		} else if (reset) {
 			logger.info("Fetching asked question");
-			url += "where%3D%7B%22trivia%22%3A0%7D";
+			url += "&where%3D%7B%22trivia%22%3A0%7D";
+		} else if (level > 0) {
+			logger.info("Fetching trivia greater than 0");
+			url += ("&where%3D%7B%22trivia%22%3A%7B%22%24gte%22%3A" + level +
+					"%7D%7D");
 		} else {
 			if (!prioritize) {
 				// Choose from everything but those that are asked
@@ -1106,14 +1119,25 @@ public class Trivia /*implements UserStreamListener*/ {
 		}
 	}
 
-	private static void markAllAsTrivia(int triviaLevel) {
+	private static void markAllAsTrivia(int triviaLevel, boolean resetZero) {
 		logger.info("Setting all questions to " + triviaLevel);
 		List<Map<String, String>> questionList;
 		do {
-			questionList = getQuestion(false, false, true, 1000, 0);
+			questionList = getQuestion(false, false, true, 1000, 0,
+					resetZero ? 0 : 1);
 			if (!questionList.isEmpty()) {
+				int newTriviaValue = triviaLevel;
 				for (Map<String, String> questionMap : questionList) {
-					markAsTrivia(questionMap.get("objectId"), triviaLevel);
+					if (!resetZero) {
+						try {
+							newTriviaValue =
+									Integer.parseInt(questionMap.get("trivia"))
+										+ 1;
+						} catch (NumberFormatException e) {
+							continue;
+						}
+					}
+					markAsTrivia(questionMap.get("objectId"), newTriviaValue);
 				}
 			}
 		} while (!questionList.isEmpty());
