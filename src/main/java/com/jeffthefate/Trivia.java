@@ -269,6 +269,18 @@ public class Trivia /*implements UserStreamListener*/ {
 			logger.info(user.getKey() + " : " + user.getValue());
 		}
 		stopListening();
+		// Start resetting the questions early
+		if (getQuestionCount(false, false, 1) <= 50) {
+			Thread markThread = new Thread() {
+				public void run() {
+					// Mark everything 1 and great up one level
+					markAllAsTrivia(2, false);
+					// Mark all 0s to 1s
+					markAllAsTrivia(1, true);
+				}
+			};
+			markThread.start();
+		}
 	}
 
 	private void setTimer(final long newWait, boolean killStream) {
@@ -776,7 +788,7 @@ public class Trivia /*implements UserStreamListener*/ {
 		default:
 			break;
 		}
-		int count = getQuestionCount(prioritize, isLightning);
+		int count = getQuestionCount(prioritize, isLightning, 0);
 		logger.info("Question count: " + count);
 		switch (count) {
 		case -1:
@@ -863,15 +875,6 @@ public class Trivia /*implements UserStreamListener*/ {
 			if (status != null) {
 				if (!isDev) {
 					markAsTrivia(question.get("objectId"), 0);
-					// Start resetting the questions early
-					if (!prioritize && count <= 50) {
-						Thread markThread = new Thread() {
-							public void run() {
-								markAllAsTrivia(2, false);
-							}
-						};
-						markThread.start();
-					}
 				}
 				currTwitterStatus.add(status.getId());
 			}
@@ -1001,7 +1004,8 @@ public class Trivia /*implements UserStreamListener*/ {
 		return mapList;
 	}
 
-	private static int getQuestionCount(boolean prioritize, boolean lightning) {
+	private static int getQuestionCount(boolean prioritize, boolean lightning,
+			int level) {
 		HttpClientBuilder httpclient = HttpClientBuilder.create();
 		HttpEntity entity = null;
 		HttpResponse response = null;
@@ -1013,6 +1017,10 @@ public class Trivia /*implements UserStreamListener*/ {
 			logger.info("Fetching lyrics or scramble count");
 			url += ("&where%3D%7B%22category%22%3A%7B%22%24in%22%3A%5B%22"
 					+ "Lyrics%22%2C%22Scramble%22%5D%7D%7D");
+		} else if (level > 0) {
+			logger.info("Fetching trivia greater than 0");
+			url += ("&where%3D%7B%22trivia%22%3A%7B%22%24gte%22%3A" + level +
+					"%7D%7D");
 		} else {
 			if (!prioritize) {
 				// Choose from everything but those that are asked
