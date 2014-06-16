@@ -64,7 +64,7 @@ public class Trivia /*implements UserStreamListener*/ {
 	private static final int WAIT_FOR_ANSWER = (60 * 1000);
 	private static final int WAIT_FOR_LIGHTNING = (20 * 1000);
 	private static final int WAIT_FOR_RESPONSE = (60 * 1000);
-	private static final int WAIT_FOR_TIP = (3 * 60 * 1000);
+	private static final int NUM_TIPS = 2;
 
 	private static final int PRE_ROUND_TIME = (15 * 1000);
 	private static final int LEADERS_EVERY = 10;
@@ -120,11 +120,6 @@ public class Trivia /*implements UserStreamListener*/ {
 	private Timer timer = new Timer();
 
 	Map<String, Integer> usersMap = new HashMap<String, Integer>();
-
-	static {
-		SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
-		System.setProperty("currentDate", dateFormat.format(new Date()));
-	}
 
 	private static Logger logger = Logger.getLogger(Trivia.class);
 
@@ -231,14 +226,18 @@ public class Trivia /*implements UserStreamListener*/ {
 				}
 			} else {
 				logger.info("Sending preshow tips");
-				int preShowTips = (int) (preShowTime / WAIT_FOR_TIP) - 1;
 				Collections.shuffle(tipList);
-				for (int i = 0; i < preShowTips; i++) {
+				int waitForTips = preShowTime / (NUM_TIPS+1);
+				for (int i = 0; i < NUM_TIPS; i++) {
 					try {
-						Thread.sleep(WAIT_FOR_TIP);
+						Thread.sleep(waitForTips);
 					} catch (InterruptedException e1) {
 					}
 					postTweet(preTweet + tipList.get(i), null, -1);
+				}
+				try {
+					Thread.sleep(waitForTips);
+				} catch (InterruptedException e1) {
 				}
 			}
 		}
@@ -400,6 +399,16 @@ public class Trivia /*implements UserStreamListener*/ {
 		String answer = massageAnswer(currAnswer);
 		logger.info("Massaged answer: " + answer);
 		// Get the diff characters between the answer and the response
+		if ((answer.startsWith("19") || answer.startsWith("20")) &&
+				answer.length() >= 4 &&
+				(!response.startsWith("19") || !response.startsWith("20"))) {
+			response = answer.substring(0, 2) + response;
+		}
+		else if ((response.startsWith("19") || response.startsWith("20")) &&
+				response.length() >= 4 &&
+				(!answer.startsWith("19") || !answer.startsWith("20"))) {
+			answer = response.substring(0, 2) + answer;
+		}
 		boolean isCorrect = checkAnswer(answer, response, userName);
 		if (!isCorrect) {
 			logger.info("Not correct, rechecking");
