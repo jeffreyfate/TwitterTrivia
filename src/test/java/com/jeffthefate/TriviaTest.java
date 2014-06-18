@@ -1,26 +1,15 @@
 package com.jeffthefate;
 
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map.Entry;
-
-import org.apache.commons.collections.MapIterator;
-import org.apache.commons.collections.bidimap.TreeBidiMap;
-
+import junit.framework.TestCase;
 import twitter4j.conf.Configuration;
 import twitter4j.conf.ConfigurationBuilder;
 
-import junit.framework.Test;
-import junit.framework.TestCase;
-import junit.framework.TestSuite;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.TreeMap;
 
 // TODO Create REAL unit tests
 
-/**
- * Unit test for simple App.
- */
 public class TriviaTest extends TestCase {
 	
 	private static final String DEV_KEY = "BXx60ptC4JAMBQLQ965H3g";
@@ -28,27 +17,12 @@ public class TriviaTest extends TestCase {
 	private static final String DEV_ACCESS_TOKEN = "1265342035-6mYSoxlw8NuZSdWX0AS6cpIu3We2CbCev6rbKUQ";
 	private static final String DEV_ACCESS_SECRET = "XqxxE4qLUK3wJ4LHlIbcSP1m6G4spZVmCDdu5RLuU";
 	
-	/**
-	 * Create the test case
-	 *
-	 * @param testName name of the test case
-	 */
-	public TriviaTest( String testName ) {
-		super( testName );
-	}
-
-	/**
-	 * @return the suite of tests being tested
-	 */
-	public static Test suite() {
-		return new TestSuite( TriviaTest.class );
-	}
-	
 	public void testTriviaScreenshot() {
 		setupAnswerMap();
 		Trivia trivia = new Trivia("D:\\setlist.jpg", "D:\\roboto.ttf",
-				"Top Scores", 30, 20, 10, 80, setupTweet(), 0, 0, nameMap, 
+				"Top Scores", 50, 20, 10, 200, setupTweet(), 0, 0, nameMap,
 				acronymMap, replaceList, tipList, true, "", 0);
+        trivia.createScreenshot(createUserMap());
 	}
 
 	/**
@@ -284,4 +258,12 @@ public class TriviaTest extends TestCase {
 		// TODO Auto-generated method stub
 		
 	}
+
+    private TreeMap<String, Integer> createUserMap() {
+        TreeMap<String, Integer> sortedMap = new TreeMap<String, Integer>();
+        for (int i = 1; i <= 10; i++) {
+            sortedMap.put("user" + i, 43);
+        }
+        return sortedMap;
+    }
 }

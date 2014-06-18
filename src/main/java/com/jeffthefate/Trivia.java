@@ -1,23 +1,9 @@
 package com.jeffthefate;
 
-import java.io.File;
-import java.io.IOException;
-import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Timer;
-import java.util.TimerTask;
-import java.util.TreeMap;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
+import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonToken;
+import com.jeffthefate.utils.EnglishNumberToWords;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
@@ -28,27 +14,26 @@ import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.util.EntityUtils;
 import org.apache.log4j.Logger;
+import twitter4j.*;
+import twitter4j.conf.Configuration;
+
+import java.io.File;
+import java.io.IOException;
+import java.util.*;
+import java.util.Map.Entry;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 //import twitter4j.DirectMessage;
 //import twitter4j.RateLimitStatusEvent;
 //import twitter4j.RateLimitStatusListener;
 //import twitter4j.StallWarning;
-import twitter4j.Status;
 //import twitter4j.StatusDeletionNotice;
-import twitter4j.StatusUpdate;
-import twitter4j.Twitter;
-import twitter4j.TwitterException;
-import twitter4j.TwitterFactory;
 //import twitter4j.TwitterStream;
 //import twitter4j.TwitterStreamFactory;
 //import twitter4j.User;
 //import twitter4j.UserList;
 //import twitter4j.UserStreamListener;
-import twitter4j.conf.Configuration;
-
-import com.fasterxml.jackson.core.JsonFactory;
-import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.core.JsonToken;
 
 /**
  * Creates a game of trivia on Twitter, played on the account in the given
@@ -71,7 +56,6 @@ public class Trivia /*implements UserStreamListener*/ {
 	private static final int PLUS_SCORE = 500;
 	private static final int BONUS_SCORE = 1000;
 
-	private static int diffCount;
 	private ArrayList<ArrayList<String>> nameMap;
 	private HashMap<String, String> acronymMap;
 	private ArrayList<String> replaceList;
@@ -89,7 +73,6 @@ public class Trivia /*implements UserStreamListener*/ {
 	private int dateSize;
 	private int limit;
 	private int verticalOffset;
-	private StringBuilder sb;
 
 	private static Screenshot screenshot;
 
@@ -101,7 +84,7 @@ public class Trivia /*implements UserStreamListener*/ {
 
 	private boolean isDev;
 
-	private Message message;
+	private final Message message = new Message();
 
 	private HashMap<String, Long> responseMap = new HashMap<String, Long>();
 	private ArrayList<String> tipList;
@@ -147,7 +130,6 @@ public class Trivia /*implements UserStreamListener*/ {
 		this.isDev = isDev;
 		this.preTweet = preTweet;
 		this.lightningCount = lightningCount;
-		message = new Message();
 	}
 
 	private class Message {
@@ -193,52 +175,37 @@ public class Trivia /*implements UserStreamListener*/ {
 		usersMap.clear();
 		scoreMap.clear();
 		winners.clear();
-		/*
-		twitterStream = new TwitterStreamFactory(twitterConfig).getInstance();
-		twitterStream.addRateLimitStatusListener(new RateLimitStatusListener() {
-			public void onRateLimitReached(RateLimitStatusEvent event) {
-				logger.error("Rate limit reached!");
-				logger.error("Limit: " + event.getRateLimitStatus().getLimit());
-				logger.error("Remaining: " +
-						event.getRateLimitStatus().getRemaining());
-				logger.error("Reset time: " +
-						event.getRateLimitStatus().getResetTimeInSeconds());
-				logger.error("Seconds until reset: " +
-						event.getRateLimitStatus().getSecondsUntilReset());
-			}
 
-			public void onRateLimitStatus(RateLimitStatusEvent event) {
-				logger.warn("Rate limit event!");
-				logger.warn("Limit: " + event.getRateLimitStatus().getLimit());
-				logger.warn("Remaining: " +
-						event.getRateLimitStatus().getRemaining());
-			}
-		});
-		*/
 		totalQuestions = 0;
 		if (preShowTweet) {
-			logger.info("Sending preshow tweet");
+			logger.info("Sending pre-show tweet");
 			postTweet(preShowText, null, -1);
 			if (tipList.isEmpty()) {
 				try {
 					Thread.sleep(preShowTime);
-				} catch (InterruptedException e1) {
+				} catch (InterruptedException e) {
+                    logger.error("Wait for pre-show interrupted!");
+                    e.printStackTrace();
 				}
 			} else {
-				logger.info("Sending preshow tips");
+				logger.info("Sending pre-show tips");
 				Collections.shuffle(tipList);
 				int waitForTips = preShowTime / (NUM_TIPS+1);
 				for (int i = 0; i < NUM_TIPS; i++) {
 					try {
 						Thread.sleep(waitForTips);
-					} catch (InterruptedException e1) {
+					} catch (InterruptedException e) {
+                        logger.error("Wait for tips interrupted!");
+                        e.printStackTrace();
 					}
 					postTweet(preTweet + tipList.get(i), null, -1);
 				}
 				try {
 					Thread.sleep(waitForTips);
-				} catch (InterruptedException e1) {
-				}
+				} catch (InterruptedException e) {
+                    logger.error("Wait for pre-show interrupted!");
+                    e.printStackTrace();
+                }
 			}
 		}
 		bonusRound = questionCount - bonusCount;
@@ -249,7 +216,7 @@ public class Trivia /*implements UserStreamListener*/ {
 		logger.info("Lightning start question: " + lightningRound);
 		roundTwo = lightningRound + lightningCount;
 		logger.info("Round 2 start question: " + roundTwo);
-		boolean success = false;
+		boolean success;
 		for (int i = 0; i < questionCount; i++) {
 			logger.info("QUESTION " + (i + 1));
 			synchronized (message) {
@@ -325,9 +292,7 @@ public class Trivia /*implements UserStreamListener*/ {
 		logger.info("Sending update tweets if applicable");
 		if (totalQuestions < questionCount) {
 			if (totalQuestions % LEADERS_EVERY == 0) {
-				screenshot = new TriviaScreenshot(templateFile, fontFile,
-						leadersTitle, generateLeaderboard(), mainSize,
-						dateSize, limit, verticalOffset);
+				screenshot = createScreenshot(generateLeaderboard());
 				postTweet(preTweet + "Current Top Scores",
 						new File(screenshot.getOutputFilename()), -1);
 			}
@@ -451,7 +416,7 @@ public class Trivia /*implements UserStreamListener*/ {
 	public void onCorrectUser(String correctAnswer, List<String> screenNames) {
 		logger.info("Correct answer: " + correctAnswer);
 		logger.info("Winners: " + screenNames);
-		sb = new StringBuilder();
+		StringBuilder sb = new StringBuilder();
 		sb.append(preTweet);
 		sb.append("Answer: \"");
 		sb.append(correctAnswer);
@@ -485,12 +450,14 @@ public class Trivia /*implements UserStreamListener*/ {
 				Thread.sleep(WAIT_BETWEEN_QUESTIONS);
 			}
 		} catch (InterruptedException e) {
+            logger.error("Sleeping between questions interrupted!");
+            e.printStackTrace();
 		}
 	}
 
 	private void onFinalLeaders() {
 		logger.info("Posting final leaderboard");
-		Map<String, Integer> sortedMap = generateLeaderboard();
+		TreeMap<String, Integer> sortedMap = generateLeaderboard();
 		String winner = "Final Top 10";
 		int firstScore = -1;
 		String firstPlayer = null;
@@ -512,11 +479,16 @@ public class Trivia /*implements UserStreamListener*/ {
 			if (playerNum > 1)
 				break;
 		}
-		screenshot = new TriviaScreenshot(templateFile, fontFile, leadersTitle,
-				sortedMap, mainSize, dateSize, limit, verticalOffset);
+		screenshot = createScreenshot(sortedMap);
 		postTweet(preTweet + winner, new File(screenshot.getOutputFilename()),
 				-1);
 	}
+
+    public TriviaScreenshot createScreenshot(
+            TreeMap<String, Integer> sortedMap) {
+        return new TriviaScreenshot(templateFile, fontFile, leadersTitle,
+                sortedMap, mainSize, dateSize, limit, verticalOffset);
+    }
 
 	private void watchTwitterStream(String answer) {
 		logger.info("Watching twitter stream for " + answer);
@@ -532,10 +504,10 @@ public class Trivia /*implements UserStreamListener*/ {
 		inTrivia = true;
 	}
 
-	private static Map<String, Integer> generateLeaderboard() {
+	private static TreeMap<String, Integer> generateLeaderboard() {
 		logger.info("Creating leaderboard");
 		ValueComparator scoreComparator = new ValueComparator(scoreMap);
-		Map<String, Integer> sortedMap = new TreeMap<String, Integer>(
+		TreeMap<String, Integer> sortedMap = new TreeMap<String, Integer>(
 				scoreComparator);
 		sortedMap.putAll(scoreMap);
 		return sortedMap;
@@ -708,7 +680,7 @@ public class Trivia /*implements UserStreamListener*/ {
 			buffer = 0;
 		}
 		logger.info("Match buffer: " + buffer);
-		diffCount = StringUtils
+		int diffCount = StringUtils
 				.getLevenshteinDistance(response, answer, buffer);
 		boolean isCorrect = false;
 		logger.info("Difference count: " + diffCount);
@@ -748,7 +720,7 @@ public class Trivia /*implements UserStreamListener*/ {
 			while (m.find()) {
 				answer = answer
 						.replace(m.group(), EnglishNumberToWords.convert(Long
-								.parseLong(m.group())));
+                                .parseLong(m.group())));
 			}
 			logger.info("Translated answer: " + answer);
 			return answer;
@@ -858,7 +830,7 @@ public class Trivia /*implements UserStreamListener*/ {
 		sb.append(question.get("question"));
 		logger.info("Total question score: " + currScore);
 		ArrayList<String> tweetList = new ArrayList<String>(0);
-		int index = -1;
+		int index;
 		while (sb.length() > 140) {
 			index = sb.indexOf(" ", 120);
 			tweetList.add(sb.substring(0, index).trim() + " ->");
@@ -876,9 +848,6 @@ public class Trivia /*implements UserStreamListener*/ {
 			if (currTwitterStatus.isEmpty()) {
 				status = postTweet(tweet, null, -1);
 			} else {
-				try {
-					Thread.sleep(1000);
-				} catch (InterruptedException e) {}
 				status = postTweet(tweet, null, currTwitterStatus.get(0));
 			}
 			if (status != null) {
@@ -901,8 +870,8 @@ public class Trivia /*implements UserStreamListener*/ {
 		logger.info("Getting question (prioritize: " + prioritize
 				+ ", lightning: " + lightning + ", reset: " + reset
 				+ ", limit: " + limit + ", skip: " + skip);
-		HttpClientBuilder httpclient = HttpClientBuilder.create();
-		HttpEntity entity = null;
+		HttpClientBuilder httpClient = HttpClientBuilder.create();
+		HttpEntity entity;
 		HttpResponse response = null;
 		String responseString = null;
 		String url = "https://api.parse.com/1/classes/Question?";
@@ -944,24 +913,26 @@ public class Trivia /*implements UserStreamListener*/ {
 		httpGet.addHeader("X-Parse-REST-API-Key",
 				"1smRSlfAvbFg4AsDxat1yZ3xknHQbyhzZ4msAi5w");
 		try {
-			response = httpclient.build().execute(httpGet);
+			response = httpClient.build().execute(httpGet);
 		} catch (IOException e) {
 			logger.error("Failed to connect to "
 					+ httpGet.getURI().toASCIIString());
 			e.printStackTrace();
 		}
-		if (response.getStatusLine().getStatusCode() != 200) {
-			logger.error("Fetch question count response NOT 200!");
-		}
-		entity = response.getEntity();
-		if (entity != null) {
-			try {
-				responseString = EntityUtils.toString(response.getEntity());
-			} catch (Exception e) {
-				logger.error("Failed to parse entity from "
-						+ httpGet.getURI().toASCIIString());
-				e.printStackTrace();
-			}
+		if (response != null) {
+            if (response.getStatusLine().getStatusCode() != 200) {
+                logger.error("Fetch question count response NOT 200!");
+            }
+            entity = response.getEntity();
+            if (entity != null) {
+                try {
+                    responseString = EntityUtils.toString(response.getEntity());
+                } catch (Exception e) {
+                    logger.error("Failed to parse entity from "
+                            + httpGet.getURI().toASCIIString());
+                    e.printStackTrace();
+                }
+            }
 		}
 		return getQuestionInfoFromResponse(responseString);
 	}
@@ -1015,10 +986,10 @@ public class Trivia /*implements UserStreamListener*/ {
 
 	private static int getQuestionCount(boolean prioritize, boolean lightning,
 			int level) {
-		HttpClientBuilder httpclient = HttpClientBuilder.create();
-		HttpEntity entity = null;
-		HttpResponse response = null;
-		String responseString = null;
+		HttpClientBuilder httpClient = HttpClientBuilder.create();
+		HttpEntity entity;
+		HttpResponse response;
+		String responseString;
 		String url = "https://api.parse.com/1/classes/Question?";
 		url += "count=1&limit=0";
 		if (lightning) {
@@ -1053,7 +1024,7 @@ public class Trivia /*implements UserStreamListener*/ {
 		httpGet.addHeader("X-Parse-REST-API-Key",
 				"1smRSlfAvbFg4AsDxat1yZ3xknHQbyhzZ4msAi5w");
 		try {
-			response = httpclient.build().execute(httpGet);
+			response = httpClient.build().execute(httpGet);
 		} catch (IOException e) {
 			logger.error("Failed to connect to "
 					+ httpGet.getURI().toASCIIString());
@@ -1115,7 +1086,7 @@ public class Trivia /*implements UserStreamListener*/ {
 		HttpClientBuilder httpclient = HttpClientBuilder.create();
 		HttpEntity entity = new StringEntity(setTrivia,
 				ContentType.APPLICATION_JSON);
-		HttpResponse response = null;
+		HttpResponse response;
 		String url = "https://api.parse.com/1/classes/Question/" + objectId;
 		HttpPut httpPut = new HttpPut(url);
 		httpPut.setEntity(entity);
@@ -1127,7 +1098,6 @@ public class Trivia /*implements UserStreamListener*/ {
 			response = httpclient.build().execute(httpPut);
 			if (response.getStatusLine().getStatusCode() != 200) {
 				logger.error("Edit question " + objectId + " response NOT 200!");
-				return;
 			}
 		} catch (Exception e) {
 			logger.error("Failed to connect to "

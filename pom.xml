@@ -40,6 +40,11 @@
 			<artifactId>screenshot</artifactId>
 			<version>1.0</version>
 		</dependency>
+        <dependency>
+            <groupId>com.jeffthefate</groupId>
+            <artifactId>utils</artifactId>
+            <version>1.0</version>
+        </dependency>
 		<dependency>
 			<groupId>com.fasterxml.jackson.core</groupId>
 			<artifactId>jackson-core</artifactId>
