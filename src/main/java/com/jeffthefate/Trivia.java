@@ -1,39 +1,22 @@
 package com.jeffthefate;
 
-import com.fasterxml.jackson.core.JsonFactory;
-import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.core.JsonToken;
 import com.jeffthefate.utils.EnglishNumberToWords;
+import com.jeffthefate.utils.GameComparator;
+import com.jeffthefate.utils.Parse;
+import com.jeffthefate.utils.TwitterUtil;
+import com.jeffthefate.utils.json.Count;
+import com.jeffthefate.utils.json.JsonUtil;
+import com.jeffthefate.utils.json.Question;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.http.HttpEntity;
-import org.apache.http.HttpResponse;
-import org.apache.http.client.methods.HttpGet;
-import org.apache.http.client.methods.HttpPut;
-import org.apache.http.entity.ContentType;
-import org.apache.http.entity.StringEntity;
-import org.apache.http.impl.client.HttpClientBuilder;
-import org.apache.http.util.EntityUtils;
 import org.apache.log4j.Logger;
 import twitter4j.*;
 import twitter4j.conf.Configuration;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.*;
 import java.util.Map.Entry;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
-//import twitter4j.DirectMessage;
-//import twitter4j.RateLimitStatusEvent;
-//import twitter4j.RateLimitStatusListener;
-//import twitter4j.StallWarning;
-//import twitter4j.StatusDeletionNotice;
-//import twitter4j.TwitterStream;
-//import twitter4j.TwitterStreamFactory;
-//import twitter4j.User;
-//import twitter4j.UserList;
-//import twitter4j.UserStreamListener;
 
 /**
  * Creates a game of trivia on Twitter, played on the account in the given
@@ -42,7 +25,7 @@ import java.util.regex.Pattern;
  * @author Jeff Fate
  * 
  */
-public class Trivia /*implements UserStreamListener*/ {
+public class Trivia {
 
 	private static final int WAIT_FOR_QUESTION = (5 * 60 * 1000);
 	private static final int WAIT_BETWEEN_QUESTIONS = 90000;
@@ -63,7 +46,6 @@ public class Trivia /*implements UserStreamListener*/ {
 	private static Map<String, Integer> scoreMap = new HashMap<String, Integer>();
 	private static int currScore = 0;
 	private static String currAnswer;
-	//private TwitterStream twitterStream = null;
 	private static List<Long> currTwitterStatus = new ArrayList<Long>(0);
 
 	private String templateFile;
@@ -72,7 +54,9 @@ public class Trivia /*implements UserStreamListener*/ {
 	private int mainSize;
 	private int dateSize;
 	private int limit;
-	private int verticalOffset;
+	private int topOffset;
+    private int bottomOffset;
+    private String triviaScreenshotFilename;
 
 	private static Screenshot screenshot;
 
@@ -106,20 +90,26 @@ public class Trivia /*implements UserStreamListener*/ {
 
 	private static Logger logger = Logger.getLogger(Trivia.class);
 
+    private Parse parse;
+    private JsonUtil jsonUtil = JsonUtil.instance();
+    private TwitterUtil twitterUtil = TwitterUtil.instance();
+
 	public Trivia(String templateFile, String fontFile, String leadersTitle,
-			int mainSize, int dateSize, int limit, int verticalOffset,
-			Configuration twitterConfig, int questionCount, int bonusCount,
-			ArrayList<ArrayList<String>> nameMap,
+			int mainSize, int dateSize, int limit, int topOffset,
+            int bottomOffset, Configuration twitterConfig, int questionCount,
+            int bonusCount, ArrayList<ArrayList<String>> nameMap,
 			HashMap<String, String> acronymMap, ArrayList<String> replaceList,
 			ArrayList<String> tipList, boolean isDev, String preTweet,
-			int lightningCount) {
+			int lightningCount, String triviaScreenshotFilename, String appId,
+            String restKey) {
 		this.templateFile = templateFile;
 		this.fontFile = fontFile;
 		this.leadersTitle = leadersTitle;
 		this.mainSize = mainSize;
 		this.dateSize = dateSize;
 		this.limit = limit;
-		this.verticalOffset = verticalOffset;
+		this.topOffset = topOffset;
+        this.bottomOffset = bottomOffset;
 		this.twitterConfig = twitterConfig;
 		this.questionCount = questionCount;
 		this.bonusCount = bonusCount;
@@ -130,11 +120,12 @@ public class Trivia /*implements UserStreamListener*/ {
 		this.isDev = isDev;
 		this.preTweet = preTweet;
 		this.lightningCount = lightningCount;
+        this.triviaScreenshotFilename = triviaScreenshotFilename;
+        parse = new Parse(appId, restKey);
 	}
 
 	private class Message {
-		public Message() {
-		}
+		public Message() {}
 	}
 
 	public void setQuestionCount(int questionCount) {
@@ -164,6 +155,17 @@ public class Trivia /*implements UserStreamListener*/ {
 		return lightningCount;
 	}
 
+    /**
+     * Begin a trivia game. Clears all information from previous games. Sends
+     * tip tweets if there is a pre-show time allotted. Cycles through questions
+     * then sends the final scores and checks if there are questions left for
+     * the next game.
+     *
+     * @param preShowTweet  send a tweet to warn players a game is starting soon
+     * @param preShowText   what is sent as the warning tweet
+     * @param preShowTime   how long to wait before starting the game after
+     *                      sending the warning tweet
+     */
 	public void startTrivia(boolean preShowTweet, String preShowText,
 			int preShowTime) {
 		logger.info("Starting trivia...");
@@ -179,7 +181,7 @@ public class Trivia /*implements UserStreamListener*/ {
 		totalQuestions = 0;
 		if (preShowTweet) {
 			logger.info("Sending pre-show tweet");
-			postTweet(preShowText, null, -1);
+            twitterUtil.updateStatus(twitterConfig, preShowText, null, -1);
 			if (tipList.isEmpty()) {
 				try {
 					Thread.sleep(preShowTime);
@@ -198,7 +200,8 @@ public class Trivia /*implements UserStreamListener*/ {
                         logger.error("Wait for tips interrupted!");
                         e.printStackTrace();
 					}
-					postTweet(preTweet + tipList.get(i), null, -1);
+                    twitterUtil.updateStatus(twitterConfig, preTweet +
+                            tipList.get(i), null, -1);
 				}
 				try {
 					Thread.sleep(waitForTips);
@@ -234,23 +237,21 @@ public class Trivia /*implements UserStreamListener*/ {
 		for (Entry<String, Integer> user : usersMap.entrySet()) {
 			logger.info(user.getKey() + " : " + user.getValue());
 		}
-		stopListening();
+		inTrivia = false;
 		// Start resetting the questions early
-		if (getQuestionCount(false, false, 1) <= 50) {
-			Thread markThread = new Thread() {
-				public void run() {
-					// Mark everything 1 and great up one level
-					markAllAsTrivia(2, false);
-					// Mark all 0s to 1s
-					markAllAsTrivia(1, true);
-				}
-			};
-			markThread.start();
+        int count = getQuestionCount(false, false, 1);
+		if (count <= 50 && count >= 0) {
+			markAllAsTriviaInBackground();
 		}
 	}
 
-	private void setTimer(final long newWait, boolean killStream) {
-		logger.info("Setting timer: " + newWait + " : " + killStream);
+    /**
+     * Set timer for waiting until the question is over.
+     *
+     * @param newWait how long players have for the current question, in ms
+     */
+	private void setTimer(final long newWait) {
+		logger.info("Setting timer: " + newWait);
 		timer.cancel();
 		timer.purge();
 		timer = new Timer();
@@ -264,23 +265,15 @@ public class Trivia /*implements UserStreamListener*/ {
 				}
 			}
 		}, newWait);
-		if (killStream) {
-			stopListening();
-		}
 	}
 
-	private void stopListening() {
-		logger.info("Stop listening to twitter stream");
-		inTrivia = false;
-		/*
-		twitterStream.removeListener(this);
-		twitterStream.shutdown();
-		*/
-	}
-
+    /**
+     * After a question is done (no more responses accepted), check for correct
+     * answers, send update tweets and update the current round.
+     */
 	private void finishTrivia() {
 		logger.info("Finishing question");
-		stopListening();
+		inTrivia = false;
 		onCorrectUser(currAnswer, winners);
 		sendUpdateTweets();
 		isLightning = totalQuestions >= lightningRound
@@ -288,34 +281,42 @@ public class Trivia /*implements UserStreamListener*/ {
 		logger.info("In lightning round: " + isLightning);
 	}
 
+    /**
+     * Send periodic update tweets based on how many questions have been asked
+     * so far and if a specific round is starting.
+     */
 	private void sendUpdateTweets() {
 		logger.info("Sending update tweets if applicable");
 		if (totalQuestions < questionCount) {
 			if (totalQuestions % LEADERS_EVERY == 0) {
 				screenshot = createScreenshot(generateLeaderboard());
-				postTweet(preTweet + "Current Top Scores",
-						new File(screenshot.getOutputFilename()), -1);
+                twitterUtil.updateStatus(twitterConfig, preTweet +
+                                "Current Top Scores",
+                        new File(screenshot.getOutputFilename()), -1);
 			}
 			if (totalQuestions == (questionCount - bonusCount)) {
-				postTweet("[BONUS ROUND] " + BONUS_SCORE + "pts added to the"
-						+ " value of each question - Points awarded to first "
-						+ "correct answer ONLY", null, -1);
+                twitterUtil.updateStatus(twitterConfig, "[BONUS ROUND] " +
+                        BONUS_SCORE + "pts added to the value of each question"
+                        + " - Points awarded to first correct answer ONLY",
+                        null, -1);
 				try {
 					Thread.sleep(PRE_ROUND_TIME);
 				} catch (InterruptedException e1) {
 					e1.printStackTrace();
 				}
 			} else if (totalQuestions == lightningRound && lightningCount > 0) {
-				postTweet("[LIGHTNING ROUND] Points awarded to first correct "
-						+ "answer only", null, -1);
+                twitterUtil.updateStatus(twitterConfig,
+                        "[LIGHTNING ROUND] Points awarded to first correct "
+                                + "answer only", null, -1);
 				try {
 					Thread.sleep(PRE_ROUND_TIME);
 				} catch (InterruptedException e1) {
 					e1.printStackTrace();
 				}
 			} else if (totalQuestions == roundTwo) {
-				postTweet("[Starting ROUND 2] " + PLUS_SCORE
-						+ "pts added to the value of each question", null, -1);
+				twitterUtil.updateStatus(twitterConfig, "[Starting ROUND 2] " +
+                                PLUS_SCORE + "pts added to the value of each question",
+                        null, -1);
 				try {
 					Thread.sleep(PRE_ROUND_TIME);
 				} catch (InterruptedException e1) {
@@ -325,6 +326,12 @@ public class Trivia /*implements UserStreamListener*/ {
 		}
 	}
 
+    /**
+     * Take the current tweet (response) and process it. Response and answer are
+     * massaged, checked against each other and timers updated as necessary.
+     *
+     * @param status current tweet received
+     */
 	public void processTweet(Status status) {
 		logger.info("inTrivia: " + inTrivia);
 		if (!inTrivia) {
@@ -390,29 +397,50 @@ public class Trivia /*implements UserStreamListener*/ {
 				}
 			} else {
 				logger.info("Bonus and 1 correct OR 3 correct - next question");
-				setTimer(WAIT_FOR_ANSWER, true);
+				setTimer(WAIT_FOR_ANSWER);
+                inTrivia = false;
 			}
 			return;
 		}
 		if (isCorrect) {
 			logger.info("CORRECT!");
-			setTimer(WAIT_FOR_ANSWER, false);
+			setTimer(WAIT_FOR_ANSWER);
 		}
 	}
 
-	private String massageResponse(String text) {
-		return text
-				.toLowerCase(Locale.getDefault())
+    /**
+     * Massage the current response text, removing unwanted special characters
+     * so it is easier to match the answer.
+     *
+     * @param text user response text
+     * @return     massaged user response text
+     */
+	public String massageResponse(String text) {
+		return text.toLowerCase(Locale.getDefault())
 				.replaceFirst(
 						"(?<=^|(?<=[^a-zA-Z0-9-_\\.]))@([A-Za-z]+[A-Za-z0-9]+)",
-						"").replaceAll("[.,'`\":;/?\\-!@#]", "").trim();
+						"").replaceAll("[.,'`|\":;/?\\-!@#]", "").trim();
 	}
 
+    /**
+     * Massage the answer text, removing unwanted special characters so it is
+     * easier to match the responses.
+     *
+     * @param text correct answer text
+     * @return     massaged correct answer text
+     */
 	private String massageAnswer(String text) {
 		return text.toLowerCase(Locale.getDefault())
 				.replaceAll("[.,'`\":;/?\\-!@#]", "").trim();
 	}
 
+    /**
+     * Tweet the correct answer and the list of players with the correct answer.
+     * If no correct responses, only the correct answer is tweeted.
+     *
+     * @param correctAnswer correct answer string
+     * @param screenNames   list of players' screen names; who got it correct
+     */
 	public void onCorrectUser(String correctAnswer, List<String> screenNames) {
 		logger.info("Correct answer: " + correctAnswer);
 		logger.info("Winners: " + screenNames);
@@ -437,8 +465,9 @@ public class Trivia /*implements UserStreamListener*/ {
 			sb.append(scoreMap.get(screenName));
 			sb.append("pts]");
 		}
-		postTweet(sb.toString(), null, currTwitterStatus != null
-				&& !currTwitterStatus.isEmpty() ? currTwitterStatus.get(0) : -1);
+		twitterUtil.updateStatus(twitterConfig, sb.toString(), null,
+                currTwitterStatus != null && !currTwitterStatus.isEmpty() ?
+                        currTwitterStatus.get(0) : -1);
 		try {
 			if (isLightning) {
 				logger.info("Waiting " + WAIT_FOR_LIGHTNING
@@ -455,6 +484,9 @@ public class Trivia /*implements UserStreamListener*/ {
 		}
 	}
 
+    /**
+     * Create final leaderboard image and tweet it.
+     */
 	private void onFinalLeaders() {
 		logger.info("Posting final leaderboard");
 		TreeMap<String, Integer> sortedMap = generateLeaderboard();
@@ -480,165 +512,50 @@ public class Trivia /*implements UserStreamListener*/ {
 				break;
 		}
 		screenshot = createScreenshot(sortedMap);
-		postTweet(preTweet + winner, new File(screenshot.getOutputFilename()),
-				-1);
+		twitterUtil.updateStatus(twitterConfig, preTweet + winner,
+                new File(screenshot.getOutputFilename()), -1);
 	}
 
+    /**
+     * Create a trivia scores screenshot with configuration supplied to this
+     * trivia object.
+     *
+     * @param sortedMap leaderboard of players with correct responses
+     * @return          TriviaScreenshot object created with supplied config
+     */
     public TriviaScreenshot createScreenshot(
             TreeMap<String, Integer> sortedMap) {
         return new TriviaScreenshot(templateFile, fontFile, leadersTitle,
-                sortedMap, mainSize, dateSize, limit, verticalOffset);
+                sortedMap, mainSize, dateSize, limit, topOffset, bottomOffset,
+                triviaScreenshotFilename);
     }
 
-	private void watchTwitterStream(String answer) {
-		logger.info("Watching twitter stream for " + answer);
-		winners.clear();
-		winners = new ArrayList<String>(0);
-		currAnswer = answer;
-		/*
-		twitterStream.addListener(this);
-		twitterStream.user();
-		*/
-		setTimer(WAIT_FOR_QUESTION, false);
-		logger.info("Setting inTrivia to true");
-		inTrivia = true;
-	}
-
-	private static TreeMap<String, Integer> generateLeaderboard() {
+    /**
+     * Create sorted map of user-score pairings.
+     *
+     * @return TreeMap with each user and their score for those who answered at
+     *         least one answer correctly
+     */
+	private TreeMap<String, Integer> generateLeaderboard() {
 		logger.info("Creating leaderboard");
-		ValueComparator scoreComparator = new ValueComparator(scoreMap);
+		GameComparator scoreComparator = new GameComparator(scoreMap);
 		TreeMap<String, Integer> sortedMap = new TreeMap<String, Integer>(
 				scoreComparator);
 		sortedMap.putAll(scoreMap);
 		return sortedMap;
 	}
 
-	private static class ValueComparator implements Comparator<String> {
-		Map<String, Integer> base;
-
-		public ValueComparator(Map<String, Integer> base) {
-			this.base = base;
-		}
-
-		// Note: this comparator imposes orderings that are inconsistent with
-		// equals.
-		public int compare(String a, String b) {
-			if (base.get(a) >= base.get(b))
-				return -1;
-			else
-				return 1;
-			// returning 0 would merge keys
-		}
-	}
-
-	public Status postTweet(String message, File file, long replyTo) {
-		logger.info("Post tweet (length: " + message.length() + "):");
-		logger.info(message);
-		Twitter twitter = new TwitterFactory(twitterConfig).getInstance();
-		StatusUpdate statusUpdate = new StatusUpdate(message);
-		logger.info("Status (length: " + statusUpdate.getStatus().length()
-				+ "):");
-		logger.info(statusUpdate.getStatus());
-		Status status = null;
-		if (file != null) {
-			logger.info("Adding screenshot");
-			statusUpdate.media(file);
-		}
-		statusUpdate.setInReplyToStatusId(replyTo);
-		try {
-			status = twitter.updateStatus(statusUpdate);
-		} catch (TwitterException e) {
-			logger.error("Failed to get timeline: " + e.getMessage());
-			e.printStackTrace();
-			sendDirectMessage(twitterConfig, "Copperpot5",
-					"Error updating status! Check the log");
-		}
-		return status;
-	}
-	
-	private static void sendDirectMessage(Configuration tweetConfig,
-			String screenName, String message) {
-		Twitter twitter = new TwitterFactory(tweetConfig).getInstance();
-		try {
-			twitter.sendDirectMessage(screenName, message);
-		} catch (TwitterException e) {
-			logger.error("Unable to send direct message!");
-			e.printStackTrace();
-		}
-	}
-	
-	/*
-	public void onBlock(User arg0, User arg1) {
-	}
-
-	public void onDeletionNotice(long arg0, long arg1) {
-	}
-
-	public void onDirectMessage(DirectMessage arg0) {
-	}
-
-	public void onFavorite(User arg0, User arg1, Status arg2) {
-	}
-
-	public void onFollow(User arg0, User arg1) {
-	}
-
-	public void onFriendList(long[] arg0) {
-	}
-
-	public void onUnblock(User arg0, User arg1) {
-	}
-
-	public void onUnfavorite(User arg0, User arg1, Status arg2) {
-	}
-	
-	public void onUnfollow(User arg0, User arg1) {	
-	}
-
-	public void onUserListCreation(User arg0, UserList arg1) {
-	}
-
-	public void onUserListDeletion(User arg0, UserList arg1) {
-	}
-
-	public void onUserListMemberAddition(User arg0, User arg1, UserList arg2) {
-	}
-
-	public void onUserListMemberDeletion(User arg0, User arg1, UserList arg2) {
-	}
-
-	public void onUserListSubscription(User arg0, User arg1, UserList arg2) {
-	}
-
-	public void onUserListUnsubscription(User arg0, User arg1, UserList arg2) {
-	}
-
-	public void onUserListUpdate(User arg0, UserList arg1) {
-	}
-
-	public void onUserProfileUpdate(User arg0) {
-	}
-
-	public void onDeletionNotice(StatusDeletionNotice arg0) {
-	}
-
-	public void onScrubGeo(long arg0, long arg1) {
-	}
-
-	public void onStallWarning(StallWarning arg0) {
-	}
-
-	public void onStatus(Status status) {
-		processTweet(status);
-	}
-
-	public void onTrackLimitationNotice(int arg0) {
-	}
-
-	public void onException(Exception e) {
-		e.printStackTrace();
-	}
-	*/
+    /**
+     * Compare answer string and response string to see if they are close
+     * enough to be matching. Adds the user and score to list for record
+     * keeping.
+     *
+     * @param answer        question's correct answer, as given
+     * @param response      string submitted by user as the answer
+     * @param screenName    user who submitted the response
+     * @return              true if response is close enough to the answer to
+     *                      be correct
+     */
 	private boolean checkAnswer(String answer, String response,
 			String screenName) {
 		logger.info("Checking answer (" + answer + ") and response ("
@@ -697,10 +614,12 @@ public class Trivia /*implements UserStreamListener*/ {
 				int pointsEarned = currScore
 						- (winners.size() * (currScore / 4));
 				winners.add(screenName);
-				if (userScore == null)
-					scoreMap.put(screenName, pointsEarned);
-				else
-					scoreMap.put(screenName, userScore + pointsEarned);
+				if (userScore == null) {
+                    scoreMap.put(screenName, pointsEarned);
+                }
+				else {
+                    scoreMap.put(screenName, userScore + pointsEarned);
+                }
 				logger.info("Adding " + screenName + " to winners");
 			}
 			break;
@@ -708,6 +627,14 @@ public class Trivia /*implements UserStreamListener*/ {
 		return isCorrect;
 	}
 
+    /**
+     * Use number to word conversions and comparisons to equal answers to
+     * convert answer and response to a more favorable string.
+     *
+     * @param answer    the correct answer to massage
+     * @param response  the response string to massage
+     * @return          either the answer or response converted to check again
+     */
 	private String reCheck(String answer, String response) {
 		logger.info("Running recheck on response (" + answer + ":" + response
 				+ ")");
@@ -751,11 +678,16 @@ public class Trivia /*implements UserStreamListener*/ {
 		return null;
 	}
 
+    /**
+     * Find a question to ask, ask it and wait for responses.
+     *
+     * @return true if everything is successful
+     */
 	public boolean askQuestion() {
 		logger.info("Asking question");
 		responseMap.clear();
 		responseMap = new HashMap<String, Long>();
-		Map<String, String> question;
+		Question question;
 		StringBuilder sb;
 		// Every 3rd question, pick one that is totally random out of
 		// New, Prioritized, Normal
@@ -788,14 +720,14 @@ public class Trivia /*implements UserStreamListener*/ {
 			}
 		}
 		int skip = ((int) (count * Math.random()));
-		List<Map<String, String>> questionList = getQuestion(prioritize,
-				isLightning, false, 1, skip, 0);
+		List<Question> questionList = getQuestions(prioritize,
+                isLightning, false, 1, skip, 0);
 		if (!questionList.isEmpty()) {
 			question = questionList.get(0);
 		} else {
 			return false;
 		}
-		if (question == null || question.isEmpty()) {
+		if (question == null || question.getObjectId() == null) {
 			return false;
 		}
 		sb = new StringBuilder();
@@ -805,18 +737,7 @@ public class Trivia /*implements UserStreamListener*/ {
 		sb.append("/");
 		sb.append(questionCount);
 		sb.append("] [");
-		String score = question.get("score");
-		try {
-			currScore = Integer.parseInt(score);
-		} catch (NumberFormatException e) {
-			logger.warn("Bad score format for question "
-					+ question.get("objectId") + ": " + question.get("score"));
-			if (score == null) {
-				currScore = 1000;
-			} else {
-				currScore = 400;
-			}
-		}
+		currScore = question.getScore();
 		logger.info("Current question score: " + currScore);
 		if (totalQuestions + 1 > (questionCount - bonusCount)) {
 			logger.info("Adding a " + BONUS_SCORE + " bonus to question score");
@@ -827,7 +748,7 @@ public class Trivia /*implements UserStreamListener*/ {
 		}
 		sb.append(currScore);
 		sb.append("pts] ");
-		sb.append(question.get("question"));
+		sb.append(question.getQuestion());
 		logger.info("Total question score: " + currScore);
 		ArrayList<String> tweetList = new ArrayList<String>(0);
 		int index;
@@ -846,13 +767,15 @@ public class Trivia /*implements UserStreamListener*/ {
 		currTwitterStatus = new ArrayList<Long>(0);
 		for (String tweet : tweetList) {
 			if (currTwitterStatus.isEmpty()) {
-				status = postTweet(tweet, null, -1);
+				status = twitterUtil.updateStatus(twitterConfig, tweet, null,
+                        -1);
 			} else {
-				status = postTweet(tweet, null, currTwitterStatus.get(0));
+				status = twitterUtil.updateStatus(twitterConfig, tweet, null,
+                        currTwitterStatus.get(0));
 			}
 			if (status != null) {
 				if (!isDev) {
-					markAsTrivia(question.get("objectId"), 0);
+                    parse.markAsTrivia(question.getObjectId(), 0);
 				}
 				currTwitterStatus.add(status.getId());
 			}
@@ -861,273 +784,154 @@ public class Trivia /*implements UserStreamListener*/ {
 				return false;
 			}
 		}
-		watchTwitterStream(question.get("answer"));
+        winners.clear();
+        winners = new ArrayList<String>(0);
+        currAnswer = question.getAnswer();
+        setTimer(WAIT_FOR_QUESTION);
+        inTrivia = true;
 		return true;
 	}
 
-	private static List<Map<String, String>> getQuestion(boolean prioritize,
-			boolean lightning, boolean reset, int limit, int skip, int level) {
+    /**
+     * Get list of questions, filtered by given parameters.
+     *
+     * @param prioritize    only those that are new or greater trivia value
+     *                      than 1
+     * @param lightning     only those that are in Lyrics or Scramble
+     *                      categories
+     * @param reset         only already asked questions
+     * @param limit         how many results to fetch
+     * @param skip          how far in the results to start looking
+     * @param level         if greater than 0, only fetch greater than 0 level
+     * @return              list of questions given the parameters
+     */
+	private List<Question> getQuestions(boolean prioritize, boolean lightning,
+            boolean reset, int limit, int skip, int level) {
 		logger.info("Getting question (prioritize: " + prioritize
 				+ ", lightning: " + lightning + ", reset: " + reset
 				+ ", limit: " + limit + ", skip: " + skip);
-		HttpClientBuilder httpClient = HttpClientBuilder.create();
-		HttpEntity entity;
-		HttpResponse response = null;
-		String responseString = null;
-		String url = "https://api.parse.com/1/classes/Question?";
-		url += ("skip=" + skip);
-		url += ("&limit=" + limit);
-		url += "&order=updatedAt";
-		if (lightning) {
-			// Get questions only from Lyrics and Scramble categories
-			logger.info("Fetching lyrics or scramble question");
-			url += ("&where%3D%7B%22category%22%3A%7B%22%24in%22%3A%5B%22"
-					+ "Lyrics%22%2C%22Scramble%22%5D%7D%7D");
-		} else if (reset) {
-			logger.info("Fetching asked question");
-			url += "&where%3D%7B%22trivia%22%3A0%7D";
-		} else if (level > 0) {
-			logger.info("Fetching trivia greater than 0");
-			url += ("&where%3D%7B%22trivia%22%3A%7B%22%24gte%22%3A" + level +
-					"%7D%7D");
-		} else {
-			if (!prioritize) {
-				// Choose from everything but those that are asked
-				logger.info("Fetching any unasked question");
-				url += ("&where%3D%7B%22%24or%22%3A%5B%7B%22trivia%22%3A%7B%22%24"
-						+ "exists%22%3Afalse%7D%7D%2C%7B%22trivia%22%3A%7B%22%24ne"
-						+ "%22%3A0%7D%7D%5D%7D");
-			} else {
-				// Choose from only new and prioritized
-				logger.info("Fetching new or prioritized question");
-				url += ("&where%3D%7B%22%24or%22%3A%5B%7B%22trivia%22%3A%7B%22%24"
-						+ "nin%22%3A%5B0%2C1%5D%7D%7D%2C%7B%22trivia%22%3A%7B%22%24"
-						+ "exists%22%3Afalse%7D%7D%5D%7D");
-			}
-		}
-		HttpGet httpGet = new HttpGet(url);
-		logger.info("Fetching questions via: ");
-		logger.info(url);
-		httpGet.addHeader("X-Parse-Application-Id",
-				"ImI8mt1EM3NhZNRqYZOyQpNSwlfsswW73mHsZV3R");
-		httpGet.addHeader("X-Parse-REST-API-Key",
-				"1smRSlfAvbFg4AsDxat1yZ3xknHQbyhzZ4msAi5w");
-		try {
-			response = httpClient.build().execute(httpGet);
-		} catch (IOException e) {
-			logger.error("Failed to connect to "
-					+ httpGet.getURI().toASCIIString());
-			e.printStackTrace();
-		}
-		if (response != null) {
-            if (response.getStatusLine().getStatusCode() != 200) {
-                logger.error("Fetch question count response NOT 200!");
+        String query = "?skip=" + skip + "&limit=" + limit + "&order=updatedAt";
+        if (lightning) {
+            // Get questions only from Lyrics and Scramble categories
+            logger.info("Fetching lyrics or scramble question");
+            query += ("&where%3D%7B%22category%22%3A%7B%22%24in%22%3A%5B%22"
+                    + "Lyrics%22%2C%22Scramble%22%5D%7D%7D");
+        } else if (reset) {
+            logger.info("Fetching asked question");
+            query += "&where%3D%7B%22trivia%22%3A0%7D";
+        } else if (level > 0) {
+            logger.info("Fetching trivia greater than 0");
+            query += ("&where%3D%7B%22trivia%22%3A%7B%22%24gte%22%3A" + level +
+                    "%7D%7D");
+        } else {
+            if (!prioritize) {
+                // Choose from everything but those that are asked
+                logger.info("Fetching any unasked question");
+                query += ("&where%3D%7B%22%24or%22%3A%5B%7B%22trivia%22%3A%7B" +
+                        "%22%24exists%22%3Afalse%7D%7D%2C%7B%22trivia%22%3A" +
+                        "%7B%22%24ne%22%3A0%7D%7D%5D%7D");
+            } else {
+                // Choose from only new and prioritized
+                logger.info("Fetching new or prioritized question");
+                query += ("&where%3D%7B%22%24or%22%3A%5B%7B%22trivia%22%3A%7B" +
+                        "%22%24nin%22%3A%5B0%2C1%5D%7D%7D%2C%7B%22trivia%22" +
+                        "%3A%7B%22%24exists%22%3Afalse%7D%7D%5D%7D");
             }
-            entity = response.getEntity();
-            if (entity != null) {
-                try {
-                    responseString = EntityUtils.toString(response.getEntity());
-                } catch (Exception e) {
-                    logger.error("Failed to parse entity from "
-                            + httpGet.getURI().toASCIIString());
-                    e.printStackTrace();
-                }
-            }
-		}
-		return getQuestionInfoFromResponse(responseString);
+        }
+        return jsonUtil.getQuestionResults(parse.get("Question", query))
+                .getResults();
 	}
 
-	private static List<Map<String, String>> getQuestionInfoFromResponse(
-			String responseString) {
-		List<Map<String, String>> mapList = new ArrayList<Map<String, String>>(
-				0);
-		if (responseString == null) {
-			return mapList;
-		}
-		JsonFactory f = new JsonFactory();
-		JsonParser jp;
-		Map<String, String> questionMap = new HashMap<String, String>();
-		String fieldname;
-		try {
-			jp = f.createParser(responseString);
-			jp.nextToken(); // START_OBJECT
-			while (jp.nextToken() != JsonToken.END_OBJECT) {
-				fieldname = jp.getCurrentName(); // "results"
-				jp.nextToken(); // START_ARRAY
-				if ("results".equals(fieldname)) { // contains an object
-					while (jp.nextToken() != JsonToken.END_ARRAY) { // START_OBJECT
-						while (jp.nextToken() != JsonToken.END_OBJECT) { // key
-							fieldname = jp.getCurrentName();
-							jp.nextToken(); // value
-							if ("answer".equals(fieldname)) {
-								questionMap.put(fieldname, jp.getText());
-							} else if ("question".equals(fieldname)) {
-								questionMap.put(fieldname, jp.getText());
-							} else if ("objectId".equals(fieldname)) {
-								questionMap.put(fieldname, jp.getText());
-							} else if ("score".equals(fieldname)) {
-								questionMap.put(fieldname, jp.getText());
-							} else if ("trivia".equals(fieldname)) {
-								logger.info("TRIVIA VALUE: " + jp.getText());
-							}
-						}
-						mapList.add(questionMap);
-						questionMap = new HashMap<String, String>();
-					}
-				}
-			}
-			jp.close(); // ensure resources get cleaned up timely and properly
-		} catch (Exception e) {
-			logger.error("Failed to parse " + responseString);
-			e.printStackTrace();
-		}
-		return mapList;
-	}
-
-	private static int getQuestionCount(boolean prioritize, boolean lightning,
+    /**
+     * Get the number of questions, filtered by given parameters.
+     *
+     * @param prioritize    count only questions that are brand new and
+     *                      those that have a trivia value greater than one
+     * @param lightning     count only questions in Lyrics and Scramble
+     *                      categories
+     * @param level         count only questions greater or equal to this level
+     * @return              number of questions, filtered by parameters
+     */
+	private int getQuestionCount(boolean prioritize, boolean lightning,
 			int level) {
-		HttpClientBuilder httpClient = HttpClientBuilder.create();
-		HttpEntity entity;
-		HttpResponse response;
-		String responseString;
-		String url = "https://api.parse.com/1/classes/Question?";
-		url += "count=1&limit=0";
+		String query = "?count=1&limit=0";
 		if (lightning) {
 			// Get questions only from Lyrics and Scramble categories
 			logger.info("Fetching lyrics or scramble count");
-			url += ("&where%3D%7B%22category%22%3A%7B%22%24in%22%3A%5B%22"
+			query += ("&where%3D%7B%22category%22%3A%7B%22%24in%22%3A%5B%22"
 					+ "Lyrics%22%2C%22Scramble%22%5D%7D%7D");
 		} else if (level > 0) {
 			logger.info("Fetching trivia greater than 0");
-			url += ("&where%3D%7B%22trivia%22%3A%7B%22%24gte%22%3A" + level +
+			query += ("&where%3D%7B%22trivia%22%3A%7B%22%24gte%22%3A" + level +
 					"%7D%7D");
 		} else {
 			if (!prioritize) {
 				// Choose from everything but those that are asked
 				logger.info("Fetching any unasked count");
-				url += ("&where%3D%7B%22%24or%22%3A%5B%7B%22trivia%22%3A%7B%22%24"
-						+ "exists%22%3Afalse%7D%7D%2C%7B%22trivia%22%3A%7B%22%24ne"
-						+ "%22%3A0%7D%7D%5D%7D");
+				query += ("&where%3D%7B%22%24or%22%3A%5B%7B%22trivia%22%3A%7B" +
+                        "%22%24exists%22%3Afalse%7D%7D%2C%7B%22trivia%22%3A" +
+                        "%7B%22%24ne%22%3A0%7D%7D%5D%7D");
 			} else {
 				// Choose from only new and prioritized
 				logger.info("Fetching new or prioritized count");
-				url += ("&where%3D%7B%22%24or%22%3A%5B%7B%22trivia%22%3A%7B%22%24"
-						+ "nin%22%3A%5B0%2C1%5D%7D%7D%2C%7B%22trivia%22%3A%7B%22%24"
-						+ "exists%22%3Afalse%7D%7D%5D%7D");
+				query += ("&where%3D%7B%22%24or%22%3A%5B%7B%22trivia%22%3A%7B" +
+                        "%22%24nin%22%3A%5B0%2C1%5D%7D%7D%2C%7B%22trivia%22" +
+                        "%3A%7B%22%24exists%22%3Afalse%7D%7D%5D%7D");
 			}
 		}
-		HttpGet httpGet = new HttpGet(url);
-		logger.info("Fetching questions via: ");
-		logger.info(url);
-		httpGet.addHeader("X-Parse-Application-Id",
-				"ImI8mt1EM3NhZNRqYZOyQpNSwlfsswW73mHsZV3R");
-		httpGet.addHeader("X-Parse-REST-API-Key",
-				"1smRSlfAvbFg4AsDxat1yZ3xknHQbyhzZ4msAi5w");
-		try {
-			response = httpClient.build().execute(httpGet);
-		} catch (IOException e) {
-			logger.error("Failed to connect to "
-					+ httpGet.getURI().toASCIIString());
-			e.printStackTrace();
-			return -1;
-		}
-		if (response.getStatusLine().getStatusCode() != 200) {
-			logger.error("Fetch question count response NOT 200!");
-			return -1;
-		}
-		entity = response.getEntity();
-		if (entity != null) {
-			try {
-				responseString = EntityUtils.toString(response.getEntity());
-			} catch (Exception e) {
-				logger.error("Failed to parse entity from "
-						+ httpGet.getURI().toASCIIString());
-				e.printStackTrace();
-				return -1;
-			}
-		} else {
-			return -1;
-		}
-		return getQuestionCountFromResponse(responseString);
+		String responseString = parse.get("Question", query);
+		Count count = jsonUtil.getCount(responseString);
+        if (count != null) {
+            return count.getCount();
+        }
+        return -1;
 	}
 
-	private static int getQuestionCountFromResponse(String responseString) {
-		JsonFactory f = new JsonFactory();
-		JsonParser jp;
-		int count = -1;
-		String fieldname;
-		try {
-			jp = f.createParser(responseString);
-			jp.nextToken();
-			jp.nextToken();
-			fieldname = jp.getCurrentName();
-			if ("results".equals(fieldname)) { // contains an object
-				jp.nextToken();
-				while (jp.nextToken() != null) {
-					jp.nextToken();
-					fieldname = jp.getCurrentName();
-					if ("count".equals(fieldname)) {
-						jp.nextToken();
-						count = Integer.parseInt(jp.getText().trim());
-					}
-				}
-			}
-			jp.close(); // ensure resources get cleaned up timely and properly
-		} catch (Exception e) {
-			logger.error("Failed to parse " + responseString);
-			e.printStackTrace();
-		}
-		return count;
-	}
-
-	private static void markAsTrivia(String objectId, int triviaLevel) {
-		logger.info("Marking question " + objectId + " to " + triviaLevel);
-		String setTrivia = "{\"trivia\":" + triviaLevel + "}";
-		HttpClientBuilder httpclient = HttpClientBuilder.create();
-		HttpEntity entity = new StringEntity(setTrivia,
-				ContentType.APPLICATION_JSON);
-		HttpResponse response;
-		String url = "https://api.parse.com/1/classes/Question/" + objectId;
-		HttpPut httpPut = new HttpPut(url);
-		httpPut.setEntity(entity);
-		httpPut.addHeader("X-Parse-Application-Id",
-				"ImI8mt1EM3NhZNRqYZOyQpNSwlfsswW73mHsZV3R");
-		httpPut.addHeader("X-Parse-REST-API-Key",
-				"1smRSlfAvbFg4AsDxat1yZ3xknHQbyhzZ4msAi5w");
-		try {
-			response = httpclient.build().execute(httpPut);
-			if (response.getStatusLine().getStatusCode() != 200) {
-				logger.error("Edit question " + objectId + " response NOT 200!");
-			}
-		} catch (Exception e) {
-			logger.error("Failed to connect to "
-					+ httpPut.getURI().toASCIIString());
-			e.printStackTrace();
-		}
-	}
-
-	private static void markAllAsTrivia(int triviaLevel, boolean resetZero) {
-		logger.info("Setting all questions to " + triviaLevel);
-		List<Map<String, String>> questionList;
+    /**
+     * Mark all questions to the given level. Also, if specified, mark all
+     * questions up one level.
+     *
+     * @param level     the new level value for questions if not updating zero
+     *                  level questions
+     * @param resetZero if true, update the zero level questions to the given
+     *                  level value. False gets all one level questions and
+     *                  increments the level values for all
+     */
+	private void markAllAsTrivia(int level, boolean resetZero) {
+		logger.info("Setting all questions to " + level);
+		List<Question> questionList;
 		do {
-			questionList = getQuestion(false, false, true, 1000, 0,
-					resetZero ? 0 : 1);
+			questionList = getQuestions(false, false, true, 1000, 0,
+                    resetZero ? 0 : 1);
 			if (!questionList.isEmpty()) {
-				int newTriviaValue = triviaLevel;
-				for (Map<String, String> questionMap : questionList) {
+				for (Question question : questionList) {
 					if (!resetZero) {
-						try {
-							newTriviaValue =
-									Integer.parseInt(questionMap.get("trivia"))
-										+ 1;
-						} catch (NumberFormatException e) {
-							continue;
-						}
-					}
-					markAsTrivia(questionMap.get("objectId"), newTriviaValue);
+                        try {
+                            level = question.getTrivia() + 1;
+                        } catch (NumberFormatException e) {
+                            continue;
+                        }
+                    }
+                    parse.markAsTrivia(question.getObjectId(), level);
 				}
 			}
 		} while (!questionList.isEmpty());
 	}
+
+    /**
+     * Set all level 0 questions to 1 and all other up one level. Executed
+     * on a background thread.
+     */
+    private void markAllAsTriviaInBackground() {
+        Thread markThread = new Thread() {
+            public void run() {
+                // Mark everything 1 and greater up one level
+                markAllAsTrivia(2, false);
+                // Mark all 0s to 1s
+                markAllAsTrivia(1, true);
+            }
+        };
+        markThread.start();
+    }
 
 }

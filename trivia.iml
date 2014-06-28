@@ -12,7 +12,7 @@
     <varelement var="file://$M2_REPO$/com/fasterxml/jackson/core/jackson-databind/2.2.3/jackson-databind-2.2.3.jar" value="M2_REPO/com/fasterxml/jackson/core/jackson-databind/2.2.3/jackson-databind-2.2.3.jar" />
     <varelement var="file://$M2_REPO$/com/fasterxml/jackson/core/jackson-annotations/2.2.3/jackson-annotations-2.2.3.jar" value="M2_REPO/com/fasterxml/jackson/core/jackson-annotations/2.2.3/jackson-annotations-2.2.3.jar" />
     <varelement var="file://$M2_REPO$/org/apache/httpcomponents/httpclient/4.3/httpclient-4.3.jar" value="M2_REPO/org/apache/httpcomponents/httpclient/4.3/httpclient-4.3.jar" />
-    <varelement var="file://$M2_REPO$" kind="src:" value="/M2_REPO" />
+    <varelement var="file://$M2_REPO$" value="src:/M2_REPO" />
     <varelement var="file://$M2_REPO$/org/apache/httpcomponents/httpcore/4.3/httpcore-4.3.jar" value="M2_REPO/org/apache/httpcomponents/httpcore/4.3/httpcore-4.3.jar" />
     <varelement var="file://$M2_REPO$/commons-logging/commons-logging/1.1.3/commons-logging-1.1.3.jar" value="M2_REPO/commons-logging/commons-logging/1.1.3/commons-logging-1.1.3.jar" />
     <varelement var="file://$M2_REPO$/commons-codec/commons-codec/1.6/commons-codec-1.6.jar" value="M2_REPO/commons-codec/commons-codec/1.6/commons-codec-1.6.jar" />

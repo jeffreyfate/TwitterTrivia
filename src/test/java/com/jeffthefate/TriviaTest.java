@@ -4,6 +4,7 @@ import junit.framework.TestCase;
 import twitter4j.conf.Configuration;
 import twitter4j.conf.ConfigurationBuilder;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.TreeMap;
@@ -16,15 +17,28 @@ public class TriviaTest extends TestCase {
 	private static final String DEV_SECRET = "0ivTqB1HKqQ6t7HQhIl0tTUNk8uRnv1nhDqyFXBw";
 	private static final String DEV_ACCESS_TOKEN = "1265342035-6mYSoxlw8NuZSdWX0AS6cpIu3We2CbCev6rbKUQ";
 	private static final String DEV_ACCESS_SECRET = "XqxxE4qLUK3wJ4LHlIbcSP1m6G4spZVmCDdu5RLuU";
-	
-	public void testTriviaScreenshot() {
-		setupAnswerMap();
-		Trivia trivia = new Trivia("D:\\setlist.jpg", "D:\\roboto.ttf",
-				"Top Scores", 50, 20, 10, 200, setupTweet(), 0, 0, nameMap,
-				acronymMap, replaceList, tipList, true, "", 0);
-        trivia.createScreenshot(createUserMap());
-	}
 
+    private Trivia trivia;
+
+    public void setUp() throws Exception {
+        super.setUp();
+        setupAnswerMap();
+        trivia = new Trivia(
+                new File("src/test/resources/setlist.jpg").getAbsolutePath(),
+                new File("src/test/resources/roboto.ttf").getAbsolutePath(),
+                "Top Scores", 60, 30, 10, 200, 40, setupTweet(), 0, 0,
+                nameMap, acronymMap, replaceList, tipList, true,
+                "Game starts on @dmbtrivia2 in 15 minutes", 0,
+                "/home/TEMP/scores",
+                "6pJz1oVHAwZ7tfOuvHfQCRz6AVKZzg1itFVfzx2q",
+                "uNZMDvDSahtRxZVRwpUVwzAG9JdLzx4cbYnhYPi7");
+    }
+
+    public void testMassageResponse() {
+        String massaged = trivia.massageResponse("#I'll Back You Up||");
+        assertEquals("Massaged responses aren't equal!", "ill back you up",
+                massaged);
+    }
 	/**
 	 * checkAnswer correctly ignores the incoming strings
 	 */
@@ -97,12 +111,12 @@ public class TriviaTest extends TestCase {
 		*/
 	}
 	
-	private static ArrayList<ArrayList<String>> nameMap = new ArrayList<ArrayList<String>>(0);
-	private static HashMap<String, String> acronymMap = new HashMap<String, String>();
-	private static ArrayList<String> replaceList = new ArrayList<String>(0);
-	private static ArrayList<String> tipList = new ArrayList<String>(0);
+	private ArrayList<ArrayList<String>> nameMap = new ArrayList<ArrayList<String>>(0);
+	private HashMap<String, String> acronymMap = new HashMap<String, String>();
+	private ArrayList<String> replaceList = new ArrayList<String>(0);
+	private ArrayList<String> tipList = new ArrayList<String>(0);
 	
-    private static void setupAnswerMap() {
+    private void setupAnswerMap() {
 		ArrayList<String> tempList = new ArrayList<String>(0);
 		tempList.add("dave");
 		tempList.add("dave matthews");
@@ -221,27 +235,6 @@ public class TriviaTest extends TestCase {
 		replaceList.add("the ");
 		replaceList.add("his ");
 		replaceList.add("her ");
-		// tipList.add("1st place gets full points, 2nd place 75% full points, 3rd place 50% full points");
-		// tipList.add("There are three rounds: first uses regular point values, second adds 500 points extra, bonus round adds 1000 extra");
-		/*
-		 * nameMap.put("dave", "dave matthews"); nameMap.put("boyd",
-		 * "boyd tinsley"); nameMap.put("stefan", "stefan lessard");
-		 * nameMap.put("carter", "carter beauford"); nameMap.put("leroi moore",
-		 * "leroi"); nameMap.put("roi", "leroi moore"); nameMap.put("leroi",
-		 * "roi"); nameMap.put("butch", "butch taylor"); nameMap.put("tim",
-		 * "tim reynolds"); nameMap.put("jeff", "jeff coffin");
-		 * nameMap.put("jeff coffin", "coffin"); nameMap.put("rashawn",
-		 * "rashawn ross"); nameMap.put("lillywhite", "steve lillywhite");
-		 * acronymMap.put("btcs", "before these crowded streets");
-		 * acronymMap.put("uttad", "under the table and dreaming");
-		 * nameMap.put("sax", "saxophone"); acronymMap.put("watchtower",
-		 * "all along the watchtower"); acronymMap.put("hunger",
-		 * "hunger for the great light"); acronymMap.put("crash",
-		 * "crash into me"); acronymMap.put("nancies", "dancing nancies");
-		 * acronymMap.put("big whiskey", "big whiskey and the groogrux king");
-		 * acronymMap.put("msg", "madison square garden"); nameMap.put("alpine",
-		 * "alpine valley"); acronymMap.put("wpb", "west palm beach");
-		 */
 	}
 	
 	private static Configuration setupTweet() {
@@ -253,11 +246,6 @@ public class TriviaTest extends TestCase {
 		  .setOAuthAccessTokenSecret(DEV_ACCESS_SECRET);
 		return cb.build();
     }
-
-	public void onNextQuestion() {
-		// TODO Auto-generated method stub
-		
-	}
 
     private TreeMap<String, Integer> createUserMap() {
         TreeMap<String, Integer> sortedMap = new TreeMap<String, Integer>();
