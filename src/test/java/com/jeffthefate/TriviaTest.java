@@ -1,5 +1,7 @@
 package com.jeffthefate;
 
+import com.jeffthefate.utils.CredentialUtil;
+import com.jeffthefate.utils.Parse;
 import junit.framework.TestCase;
 import twitter4j.conf.Configuration;
 import twitter4j.conf.ConfigurationBuilder;
@@ -19,19 +21,20 @@ public class TriviaTest extends TestCase {
 	private static final String DEV_ACCESS_SECRET = "XqxxE4qLUK3wJ4LHlIbcSP1m6G4spZVmCDdu5RLuU";
 
     private Trivia trivia;
+    private CredentialUtil credentialUtil;
 
     public void setUp() throws Exception {
         super.setUp();
         setupAnswerMap();
+        credentialUtil = CredentialUtil.instance();
+        Parse parse = credentialUtil.getCredentialedParse(true);
         trivia = new Trivia(
                 new File("src/test/resources/setlist.jpg").getAbsolutePath(),
                 new File("src/test/resources/roboto.ttf").getAbsolutePath(),
                 "Top Scores", 60, 30, 10, 200, 40, setupTweet(), 0, 0,
                 nameMap, acronymMap, replaceList, tipList, true,
                 "Game starts on @dmbtrivia2 in 15 minutes", 0,
-                "/home/TEMP/scores",
-                "6pJz1oVHAwZ7tfOuvHfQCRz6AVKZzg1itFVfzx2q",
-                "uNZMDvDSahtRxZVRwpUVwzAG9JdLzx4cbYnhYPi7");
+                "/home/TEMP/scores", parse);
     }
 
     public void testMassageResponse() {

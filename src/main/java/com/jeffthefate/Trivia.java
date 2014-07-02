@@ -100,8 +100,7 @@ public class Trivia {
             int bonusCount, ArrayList<ArrayList<String>> nameMap,
 			HashMap<String, String> acronymMap, ArrayList<String> replaceList,
 			ArrayList<String> tipList, boolean isDev, String preTweet,
-			int lightningCount, String triviaScreenshotFilename, String appId,
-            String restKey) {
+			int lightningCount, String triviaScreenshotFilename, Parse parse) {
 		this.templateFile = templateFile;
 		this.fontFile = fontFile;
 		this.leadersTitle = leadersTitle;
@@ -121,7 +120,7 @@ public class Trivia {
 		this.preTweet = preTweet;
 		this.lightningCount = lightningCount;
         this.triviaScreenshotFilename = triviaScreenshotFilename;
-        parse = new Parse(appId, restKey);
+        this.parse = parse;
 	}
 
 	private class Message {
