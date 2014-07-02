@@ -9,7 +9,7 @@ import com.jeffthefate.utils.json.JsonUtil;
 import com.jeffthefate.utils.json.Question;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.log4j.Logger;
-import twitter4j.*;
+import twitter4j.Status;
 import twitter4j.conf.Configuration;
 
 import java.io.File;
@@ -58,7 +58,7 @@ public class Trivia {
     private int bottomOffset;
     private String triviaScreenshotFilename;
 
-	private static Screenshot screenshot;
+	private TriviaScreenshot screenshot;
 
 	private Configuration twitterConfig;
 
@@ -290,6 +290,7 @@ public class Trivia {
 		if (totalQuestions < questionCount) {
 			if (totalQuestions % LEADERS_EVERY == 0) {
 				screenshot = createScreenshot(generateLeaderboard());
+                screenshot.createScreenshot();
                 twitterUtil.updateStatus(twitterConfig, preTweet +
                                 "Current Top Scores",
                         new File(screenshot.getOutputFilename()), -1);
@@ -512,6 +513,7 @@ public class Trivia {
 				break;
 		}
 		screenshot = createScreenshot(sortedMap);
+        screenshot.createScreenshot();
 		twitterUtil.updateStatus(twitterConfig, preTweet + winner,
                 new File(screenshot.getOutputFilename()), -1);
 	}
