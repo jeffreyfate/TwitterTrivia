@@ -42,11 +42,11 @@ public class Trivia {
 	private ArrayList<ArrayList<String>> nameMap;
 	private HashMap<String, String> acronymMap;
 	private ArrayList<String> replaceList;
-	private static List<String> winners = new ArrayList<String>(0);
-	private static Map<String, Integer> scoreMap = new HashMap<String, Integer>();
+	private static List<String> winners = new ArrayList<>(0);
+	private static Map<String, Integer> scoreMap = new HashMap<>();
 	private static int currScore = 0;
 	private static String currAnswer;
-	private static List<Long> currTwitterStatus = new ArrayList<Long>(0);
+	private static List<Long> currTwitterStatus = new ArrayList<>(0);
 
 	private String templateFile;
 	private String fontFile;
@@ -70,7 +70,7 @@ public class Trivia {
 
 	private final Message message = new Message();
 
-	private HashMap<String, Long> responseMap = new HashMap<String, Long>();
+	private HashMap<String, Long> responseMap = new HashMap<>();
 	private ArrayList<String> tipList;
 
 	private String preTweet;
@@ -86,7 +86,7 @@ public class Trivia {
 
 	private Timer timer = new Timer();
 
-	Map<String, Integer> usersMap = new HashMap<String, Integer>();
+	Map<String, Integer> usersMap = new HashMap<>();
 
 	private static Logger logger = Logger.getLogger(Trivia.class);
 
@@ -540,7 +540,7 @@ public class Trivia {
 	private TreeMap<String, Integer> generateLeaderboard() {
 		logger.info("Creating leaderboard");
 		GameComparator scoreComparator = new GameComparator(scoreMap);
-		TreeMap<String, Integer> sortedMap = new TreeMap<String, Integer>(
+		TreeMap<String, Integer> sortedMap = new TreeMap<>(
 				scoreComparator);
 		sortedMap.putAll(scoreMap);
 		return sortedMap;
@@ -687,7 +687,7 @@ public class Trivia {
 	public boolean askQuestion() {
 		logger.info("Asking question");
 		responseMap.clear();
-		responseMap = new HashMap<String, Long>();
+		responseMap = new HashMap<>();
 		Question question;
 		StringBuilder sb;
 		// Every 3rd question, pick one that is totally random out of
@@ -751,7 +751,7 @@ public class Trivia {
 		sb.append("pts] ");
 		sb.append(question.getQuestion());
 		logger.info("Total question score: " + currScore);
-		ArrayList<String> tweetList = new ArrayList<String>(0);
+		ArrayList<String> tweetList = new ArrayList<>(0);
 		int index;
 		while (sb.length() > 140) {
 			index = sb.indexOf(" ", 120);
@@ -765,7 +765,7 @@ public class Trivia {
 			isBonus = true;
 		}
 		Status status;
-		currTwitterStatus = new ArrayList<Long>(0);
+		currTwitterStatus = new ArrayList<>(0);
 		for (String tweet : tweetList) {
 			if (currTwitterStatus.isEmpty()) {
 				status = twitterUtil.updateStatus(twitterConfig, tweet, null,
@@ -786,7 +786,7 @@ public class Trivia {
 			}
 		}
         winners.clear();
-        winners = new ArrayList<String>(0);
+        winners = new ArrayList<>(0);
         currAnswer = question.getAnswer();
         setTimer(WAIT_FOR_QUESTION);
         inTrivia = true;
