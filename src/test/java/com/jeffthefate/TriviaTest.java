@@ -3,35 +3,26 @@ package com.jeffthefate;
 import com.jeffthefate.utils.CredentialUtil;
 import com.jeffthefate.utils.Parse;
 import junit.framework.TestCase;
-import twitter4j.conf.Configuration;
-import twitter4j.conf.ConfigurationBuilder;
 
 import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.TreeMap;
 
-// TODO Create REAL unit tests
-
 public class TriviaTest extends TestCase {
-	
-	private static final String DEV_KEY = "BXx60ptC4JAMBQLQ965H3g";
-	private static final String DEV_SECRET = "0ivTqB1HKqQ6t7HQhIl0tTUNk8uRnv1nhDqyFXBw";
-	private static final String DEV_ACCESS_TOKEN = "1265342035-6mYSoxlw8NuZSdWX0AS6cpIu3We2CbCev6rbKUQ";
-	private static final String DEV_ACCESS_SECRET = "XqxxE4qLUK3wJ4LHlIbcSP1m6G4spZVmCDdu5RLuU";
 
     private Trivia trivia;
-    private CredentialUtil credentialUtil;
 
     public void setUp() throws Exception {
         super.setUp();
         setupAnswerMap();
-        credentialUtil = CredentialUtil.instance();
+        CredentialUtil credentialUtil = CredentialUtil.instance();
         Parse parse = credentialUtil.getCredentialedParse(true);
         trivia = new Trivia(
                 new File("src/test/resources/setlist.jpg").getAbsolutePath(),
                 new File("src/test/resources/roboto.ttf").getAbsolutePath(),
-                "Top Scores", 60, 30, 10, 200, 40, setupTweet(), 0, 0,
+                "Top Scores", 60, 30, 10, 200, 40,
+                credentialUtil.getCredentialedTwitter(parse, true), 0, 0,
                 nameMap, acronymMap, replaceList, tipList, true,
                 "Game starts on @dmbtrivia2 in 15 minutes", 0,
                 "/home/TEMP/scores", parse);
@@ -239,16 +230,7 @@ public class TriviaTest extends TestCase {
 		replaceList.add("his ");
 		replaceList.add("her ");
 	}
-	
-	private static Configuration setupTweet() {
-    	ConfigurationBuilder cb = new ConfigurationBuilder();
-		cb.setDebugEnabled(true)
-		  .setOAuthConsumerKey(DEV_KEY)
-		  .setOAuthConsumerSecret(DEV_SECRET)
-		  .setOAuthAccessToken(DEV_ACCESS_TOKEN)
-		  .setOAuthAccessTokenSecret(DEV_ACCESS_SECRET);
-		return cb.build();
-    }
+
 
     private TreeMap<String, Integer> createUserMap() {
         TreeMap<String, Integer> sortedMap = new TreeMap<String, Integer>();
