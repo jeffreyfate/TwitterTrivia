@@ -1,30 +1,36 @@
 package com.jeffthefate;
 
 import com.jeffthefate.utils.CredentialUtil;
+import com.jeffthefate.utils.GameUtil;
 import com.jeffthefate.utils.Parse;
+import com.jeffthefate.utils.json.Question;
 import junit.framework.TestCase;
 
 import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.TreeMap;
+import java.util.List;
+import java.util.Map;
 
 public class TriviaTest extends TestCase {
 
     private Trivia trivia;
+    private GameUtil gameUtil;
 
     public void setUp() throws Exception {
         super.setUp();
-        setupAnswerMap();
         CredentialUtil credentialUtil = CredentialUtil.instance();
-        Parse parse = credentialUtil.getCredentialedParse(true);
+        gameUtil = GameUtil.instance();
+        Parse parse = credentialUtil.getCredentialedParse(true,
+                "D:\\parseCreds");
         trivia = new Trivia(
                 new File("src/test/resources/setlist.jpg").getAbsolutePath(),
                 new File("src/test/resources/roboto.ttf").getAbsolutePath(),
-                "Top Scores", 60, 30, 10, 200, 40,
+                "Top Scores", 45, 22, 10, 200, 100,
                 credentialUtil.getCredentialedTwitter(parse, true), 0, 0,
-                nameMap, acronymMap, replaceList, tipList, true,
-                "Game starts on @dmbtrivia2 in 15 minutes", 0,
+                gameUtil.setupAnswerList(), gameUtil.createAcronymMap(),
+                gameUtil.createReplaceList(), gameUtil.createTipList(),
+                true, "Game starts on @dmbtrivia2 in 15 minutes", 0,
                 "/home/TEMP/scores", parse);
     }
 
@@ -33,210 +39,142 @@ public class TriviaTest extends TestCase {
         assertEquals("Massaged responses aren't equal!", "ill back you up",
                 massaged);
     }
+
+    public void testMassageAnswer() {
+        String massaged = trivia.massageAnswer("Don't Drink the Water");
+        assertEquals("Massaged responses aren't equal!", "dont drink the water",
+                massaged);
+        massaged = trivia.massageAnswer("#41");
+        assertEquals("Massaged responses aren't equal!", "41", massaged);
+    }
+
+    public void testGenerateLeaderboard() {
+        Map<Object, Object> scoreMap = new HashMap<>();
+        scoreMap.put("testUser01", 50000000);
+        scoreMap.put("testUser02", 10);
+        scoreMap.put("testUser03", -1);
+        scoreMap.put("testUser04", 54321);
+        scoreMap.put("testUser05", 12390984);
+        scoreMap.put("testUser06", 7654567);
+        scoreMap.put("testUser07", 7876545);
+        scoreMap.put("testUser08", 60000000);
+        scoreMap.put("testUser09", 9493);
+        scoreMap.put("testUser10", 23095);
+        scoreMap.put("testUser11", 9593);
+        scoreMap.put("testUser12", 12341);
+        scoreMap.put("testUser13", 5096705);
+        scoreMap.put("testUser14", 5848);
+        scoreMap.put("testUser15", 1);
+        trivia.setScoreMap(scoreMap);
+        Map<Object, Object> leaderboard = trivia.generateLeaderboard();
+        Integer last = 999999999;
+        for (Map.Entry<Object, Object> leader : leaderboard.entrySet()) {
+            assertTrue("Sort not correct!", last > (Integer) leader.getValue());
+            last = (Integer) leader.getValue();
+        }
+    }
 	/**
 	 * checkAnswer correctly ignores the incoming strings
 	 */
 	public void testCheckAnswer() {
-		setupAnswerMap();
-		/*
-		Trivia trivia = new Trivia("", "", "", 0, 0, 0,
-				setupTweet(), 0, nameMap, acronymMap,
-				true, "@dmbtrivia", this);
-		try {
-			Method method1 = Trivia.class.getDeclaredMethod("checkAnswer",
-					String.class, String.class, String.class);
-			method1.setAccessible(true);
-			Method method2 = Trivia.class.getDeclaredMethod("reCheck",
-					String.class, String.class);
-			method2.setAccessible(true);
-			Boolean output = (Boolean) method1.invoke(trivia, "crash",
-					"crash into me", "@jeffthefate");
-			if (!output)
-				output = (Boolean) method1.invoke(trivia, "crash",
-						(String) method2.invoke(trivia, "crash", "crash into me"), "@jeffthefate");
-			System.out.println("result: " + output);
-			trivia.resetCheckedAcronymMap();
-			trivia.resetCheckedNameMap();
-			MapIterator it = nameMap.mapIterator();
-			Object key;
-			Object value;
-			while (it.hasNext()) {
-				key = it.next();
-				value = it.getValue();
-				output = (Boolean) method.invoke(trivia, key,
-						value, "@jeffthefate");
-				System.out.println("result: " + output);
-				trivia.resetCheckedAcronymMap();
-				trivia.resetCheckedNameMap();
-				output = (Boolean) method.invoke(trivia, value,
-						key, "@jeffthefate");
-				System.out.println("result: " + output);
-				trivia.resetCheckedAcronymMap();
-				trivia.resetCheckedNameMap();
-			}
-			it = acronymMap.mapIterator();
-			while (it.hasNext()) {
-				key = it.next();
-				value = it.getValue();
-				output = (Boolean) method.invoke(trivia, value,
-						key, "@jeffthefate");
-				System.out.println("result: " + output);
-				trivia.resetCheckedAcronymMap();
-				trivia.resetCheckedNameMap();
-				output = (Boolean) method.invoke(trivia, key,
-						value, "@jeffthefate");
-				System.out.println("result: " + output);
-				trivia.resetCheckedAcronymMap();
-				trivia.resetCheckedNameMap();
-			}
-		} catch (IllegalAccessException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		} catch (IllegalArgumentException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		} catch (InvocationTargetException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		} catch (NoSuchMethodException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-		*/
-	}
-	
-	private ArrayList<ArrayList<String>> nameMap = new ArrayList<ArrayList<String>>(0);
-	private HashMap<String, String> acronymMap = new HashMap<String, String>();
-	private ArrayList<String> replaceList = new ArrayList<String>(0);
-	private ArrayList<String> tipList = new ArrayList<String>(0);
-	
-    private void setupAnswerMap() {
-		ArrayList<String> tempList = new ArrayList<String>(0);
-		tempList.add("dave");
-		tempList.add("dave matthews");
-		nameMap.add(tempList);
-		tempList = new ArrayList<String>(0);
-		tempList.add("boyd");
-		tempList.add("boyd tinsley");
-		nameMap.add(tempList);
-		tempList = new ArrayList<String>(0);
-		tempList.add("stefan");
-		tempList.add("stefan lessard");
-		nameMap.add(tempList);
-		tempList = new ArrayList<String>(0);
-		tempList.add("carter");
-		tempList.add("carter beauford");
-		nameMap.add(tempList);
-		tempList = new ArrayList<String>(0);
-		tempList.add("leroi");
-		tempList.add("leroi moore");
-		tempList.add("roi");
-		nameMap.add(tempList);
-		tempList = new ArrayList<String>(0);
-		tempList.add("butch");
-		tempList.add("butch taylor");
-		nameMap.add(tempList);
-		tempList = new ArrayList<String>(0);
-		tempList.add("tim");
-		tempList.add("tim reynolds");
-		nameMap.add(tempList);
-		tempList = new ArrayList<String>(0);
-		tempList.add("jeff");
-		tempList.add("jeff coffin");
-		tempList.add("coffin");
-		nameMap.add(tempList);
-		tempList = new ArrayList<String>(0);
-		tempList.add("rashawn");
-		tempList.add("rashawn ross");
-		nameMap.add(tempList);
-		tempList = new ArrayList<String>(0);
-		tempList.add("lillywhite");
-		tempList.add("steve lillywhite");
-		nameMap.add(tempList);
-		tempList = new ArrayList<String>(0);
-		tempList.add("lawlor");
-		tempList.add("joe lawlor");
-		nameMap.add(tempList);
-		tempList = new ArrayList<String>(0);
-		tempList.add("fenton");
-		tempList.add("fenton williams");
-		nameMap.add(tempList);
-		tempList = new ArrayList<String>(0);
-		tempList.add("peter");
-		tempList.add("peter griesar");
-		nameMap.add(tempList);
-		tempList = new ArrayList<String>(0);
-		tempList.add("sax");
-		tempList.add("saxophone");
-		nameMap.add(tempList);
-		tempList = new ArrayList<String>(0);
-		tempList.add("alpine");
-		tempList.add("alpine valley");
-		nameMap.add(tempList);
-		tempList = new ArrayList<String>(0);
-		tempList.add("big whiskey and the groogrux king");
-		tempList.add("big whiskey");
-		tempList.add("big whiskey & the groogrux king");
-		tempList.add("bwggk");
-		nameMap.add(tempList);
-		tempList = new ArrayList<String>(0);
-		tempList.add("stay");
-		tempList.add("stay (wasting time)");
-		nameMap.add(tempList);
-		tempList = new ArrayList<String>(0);
-		tempList.add("you and me");
-		tempList.add("you & me");
-		nameMap.add(tempList);
-		tempList = new ArrayList<String>(0);
-		tempList.add("rhyme and reason");
-		tempList.add("rhyme & reason");
-		nameMap.add(tempList);
-		tempList = new ArrayList<String>(0);
-		tempList.add("funny the way it is");
-		tempList.add("ftwii");
-		tempList.add("funny");
-		nameMap.add(tempList);
-		tempList = new ArrayList<String>(0);
-		tempList.add("sweet up & down");
-		tempList.add("sweet up and down");
-		nameMap.add(tempList);
-		tempList = new ArrayList<String>(0);
-		tempList.add("billies");
-		tempList.add("tripping billies");
-		nameMap.add(tempList);
-		tempList = new ArrayList<String>(0);
-		tempList.add("bela fleck and the flecktones");
-		tempList.add("bela fleck & the flecktones");
-		tempList.add("the flecktones");
-		nameMap.add(tempList);
-		tempList = new ArrayList<String>(0);
-		tempList.add("any noise");
-		tempList.add("any noise/anti-noise");
-		tempList.add("any noise anti-noise");
-		tempList.add("any noise anti noise");
-		tempList.add("any noise antinoise");
-		tempList.add("anynoise antinoise");
-		nameMap.add(tempList);
-		acronymMap.put("btcs", "before these crowded streets");
-		acronymMap.put("uttad", "under the table and dreaming");
-		acronymMap.put("watchtower", "all along the watchtower");
-		acronymMap.put("hunger", "hunger for the great light");
-		acronymMap.put("crash", "crash into me");
-		acronymMap.put("nancies", "dancing nancies");
-		acronymMap.put("msg", "madison square garden");
-		acronymMap.put("wpb", "west palm beach");
-		acronymMap.put("ddtw", "dont drink the water");
-		replaceList.add("the ");
-		replaceList.add("his ");
-		replaceList.add("her ");
+        assertTrue("Response should match answer!", trivia.checkAnswer("41",
+                "41"));
+        assertTrue("Response should match answer!", trivia.checkAnswer(
+                "dont drink teh water", "dont drink the water"));
+        assertTrue("Response should match answer!", trivia.checkAnswer(
+                "anne mathews", "anne matthews"));
+        assertFalse("Null response or answer should not match!",
+                trivia.checkAnswer(null, "test"));
+        assertFalse("Null response or answer should not match!",
+                trivia.checkAnswer("test", null));
 	}
 
-
-    private TreeMap<String, Integer> createUserMap() {
-        TreeMap<String, Integer> sortedMap = new TreeMap<String, Integer>();
-        for (int i = 1; i <= 10; i++) {
-            sortedMap.put("user" + i, 43);
-        }
-        return sortedMap;
+    public void testUpdateWinnersLightning() {
+        trivia.setCurrScore(44);
+        trivia.setLightning(true);
+        trivia.setWinners(new ArrayList<String>(0));
+        trivia.updateWinners("jeffthefate");
+        List<String> expected = new ArrayList<>(0);
+        expected.add("jeffthefate");
+        assertEquals("Winners lists are inconsistent!", expected,
+                trivia.getWinners());
+        assertEquals("Score is incorrect!", 44,
+                ((Integer) trivia.getScoreMap().get("jeffthefate")).intValue());
     }
+
+    public void testUpdateWinnersBonus() {
+        trivia.setCurrScore(44);
+        trivia.setBonus(true);
+        trivia.setWinners(new ArrayList<String>(0));
+        trivia.updateWinners("jeffthefate");
+        List<String> expected = new ArrayList<>(0);
+        expected.add("jeffthefate");
+        assertEquals("Winners lists are inconsistent!", expected,
+                trivia.getWinners());
+        assertEquals("Score is incorrect!", 44,
+                ((Integer) trivia.getScoreMap().get("jeffthefate")).intValue());
+    }
+
+    public void testUpdateWinners() {
+        trivia.setCurrScore(44);
+        trivia.setWinners(new ArrayList<String>(0));
+        trivia.updateWinners("jeffthefate");
+        assertEquals("Winners should have one user!", 1,
+                trivia.getWinners().size());
+        assertEquals("Score is incorrect!", 44,
+                ((Integer) trivia.getScoreMap().get("jeffthefate")).intValue());
+        trivia.updateWinners("jeffthefate");
+        assertEquals("Winners should have one user!", 1,
+                trivia.getWinners().size());
+        trivia.updateWinners("copperpot5");
+        assertEquals("Winners should have two users!", 2,
+                trivia.getWinners().size());
+        trivia.updateWinners("dmbtrivia");
+        assertEquals("Winners should have three users!", 3,
+                trivia.getWinners().size());
+        trivia.updateWinners("dmbtrivia2");
+        assertEquals("Winners should have three users!", 3,
+                trivia.getWinners().size());
+        trivia.getScoreMap().put("jeffthefate", 400);
+        trivia.getWinners().clear();
+        trivia.setCurrScore(500);
+        trivia.updateWinners("jeffthefate");
+        assertEquals("Score is incorrect!", 900,
+                ((Integer) trivia.getScoreMap().get("jeffthefate")).intValue());
+    }
+
+    public void testReCheck() {
+        String massaged = trivia.reCheck("tripping billies", "billies");
+        assertEquals("Answer and response don't match!", "tripping billies",
+                massaged);
+        massaged = trivia.reCheck("10", "ten");
+        assertEquals("Answer and response don't match!", "ten",
+                massaged);
+        massaged = trivia.reCheck("dont drink the water", "ddtw");
+        assertEquals("Answer and response don't match!", "dont drink the water",
+                massaged);
+        massaged = trivia.reCheck("dont drink the water", "spoon");
+        assertNull("Shouldn't have matched!", massaged);
+    }
+
+    public void testGetQuestions() {
+        List<Question> questions = trivia.getQuestions(true, true, true, 1,
+                1, 1);
+        assertEquals("Not expected number of questions!", 1, questions.size());
+        questions = trivia.getQuestions(false, true, true, 1, 1, 1);
+        assertEquals("Not expected number of questions!", 1, questions.size());
+        questions = trivia.getQuestions(false, false, true, 1, 1, 1);
+        assertEquals("Not expected number of questions!", 0, questions.size());
+        questions = trivia.getQuestions(false, false, false, 1, 1, 1);
+        assertEquals("Not expected number of questions!", 0, questions.size());
+        questions = trivia.getQuestions(true, false, true, 1, 1, 1);
+        assertEquals("Not expected number of questions!", 0, questions.size());
+        questions = trivia.getQuestions(true, false, false, 1, 1, 1);
+        assertEquals("Not expected number of questions!", 0, questions.size());
+        questions = trivia.getQuestions(true, true, false, 1, 1, 1);
+        assertEquals("Not expected number of questions!", 1, questions.size());
+        questions = trivia.getQuestions(false, true, false, 1, 1, 1);
+        assertEquals("Not expected number of questions!", 1, questions.size());
+    }
+
 }

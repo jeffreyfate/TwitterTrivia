@@ -15,6 +15,7 @@ import twitter4j.conf.Configuration;
 import java.io.File;
 import java.util.*;
 import java.util.Map.Entry;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -42,9 +43,9 @@ public class Trivia {
 	private ArrayList<ArrayList<String>> nameMap;
 	private HashMap<String, String> acronymMap;
 	private ArrayList<String> replaceList;
-	private static List<String> winners = new ArrayList<>(0);
-	private static Map<String, Integer> scoreMap = new HashMap<>();
-	private static int currScore = 0;
+    private static List<String> winners = new ArrayList<>(0);
+    private Map<Object, Object> scoreMap = new HashMap<>();
+    private static int currScore = 0;
 	private static String currAnswer;
 	private static List<Long> currTwitterStatus = new ArrayList<>(0);
 
@@ -79,7 +80,8 @@ public class Trivia {
 	private int lightningRound;
 	private int roundTwo;
 	private int bonusRound;
-	private boolean isLightning = false;
+
+    private boolean isLightning = false;
 	private boolean isBonus = false;
 	
 	private boolean inTrivia = false;
@@ -154,6 +156,46 @@ public class Trivia {
 		return lightningCount;
 	}
 
+    public Map<Object, Object> getScoreMap() {
+        return scoreMap;
+    }
+
+    public void setScoreMap(Map<Object, Object> scoreMap) {
+        this.scoreMap = scoreMap;
+    }
+
+    public boolean isLightning() {
+        return isLightning;
+    }
+
+    public void setLightning(boolean isLightning) {
+        this.isLightning = isLightning;
+    }
+
+    public boolean isBonus() {
+        return isBonus;
+    }
+
+    public void setBonus(boolean isBonus) {
+        this.isBonus = isBonus;
+    }
+
+    public static List<String> getWinners() {
+        return winners;
+    }
+
+    public static void setWinners(List<String> winners) {
+        Trivia.winners = winners;
+    }
+
+    public static int getCurrScore() {
+        return currScore;
+    }
+
+    public static void setCurrScore(int currScore) {
+        Trivia.currScore = currScore;
+    }
+
     /**
      * Begin a trivia game. Clears all information from previous games. Sends
      * tip tweets if there is a pre-show time allotted. Cycles through questions
@@ -223,6 +265,11 @@ public class Trivia {
 			logger.info("QUESTION " + (i + 1));
 			synchronized (message) {
 				do {
+                    try {
+                        TimeUnit.SECONDS.sleep(1);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
 					success = askQuestion();
 				} while (!success);
 				try {
@@ -381,11 +428,14 @@ public class Trivia {
 				(!answer.startsWith("19") || !answer.startsWith("20"))) {
 			answer = response.substring(0, 2) + answer;
 		}
-		boolean isCorrect = checkAnswer(answer, response, userName);
+		boolean isCorrect = checkAnswer(answer, response);
 		if (!isCorrect) {
 			logger.info("Not correct, rechecking");
-			isCorrect = checkAnswer(answer, reCheck(answer, response), userName);
+			isCorrect = checkAnswer(answer, reCheck(answer, response));
 		}
+        if (isCorrect) {
+            updateWinners(userName);
+        }
 		if ((isLightning && winners.size() == 1)
 				|| (isBonus && winners.size() == 1) || winners.size() == 3) {
 			logger.info("At least one correct answer");
@@ -429,7 +479,7 @@ public class Trivia {
      * @param text correct answer text
      * @return     massaged correct answer text
      */
-	private String massageAnswer(String text) {
+	public String massageAnswer(String text) {
 		return text.toLowerCase(Locale.getDefault())
 				.replaceAll("[.,'`\":;/?\\-!@#]", "").trim();
 	}
@@ -453,7 +503,8 @@ public class Trivia {
 		for (int i = 0; i < screenNames.size(); i++) {
 			screenName = screenNames.get(i);
 			if (sb.length() + 11 + screenName.length()
-					+ Integer.toString(scoreMap.get(screenName)).length() > 140)
+					+ Integer.toString((Integer)scoreMap.get(screenName))
+                        .length() > 140)
 				break;
 			else
 				sb.append("\n");
@@ -489,16 +540,16 @@ public class Trivia {
      */
 	private void onFinalLeaders() {
 		logger.info("Posting final leaderboard");
-		TreeMap<String, Integer> sortedMap = generateLeaderboard();
+		TreeMap<Object, Object> sortedMap = generateLeaderboard();
 		String winner = "Final Top 10";
 		int firstScore = -1;
 		String firstPlayer = null;
 		int playerNum = 0;
-		for (Entry<String, Integer> player : sortedMap.entrySet()) {
+		for (Entry<Object, Object> player : sortedMap.entrySet()) {
 			playerNum++;
 			if (playerNum <= 1) {
-				firstScore = player.getValue();
-				firstPlayer = player.getKey();
+				firstScore = (Integer) player.getValue();
+				firstPlayer = (String) player.getKey();
 			} else {
 				if (player.getValue() == firstScore) {
 					winner = "@" + firstPlayer + " and @" + player.getKey()
@@ -525,7 +576,7 @@ public class Trivia {
      * @return          TriviaScreenshot object created with supplied config
      */
     public TriviaScreenshot createScreenshot(
-            TreeMap<String, Integer> sortedMap) {
+            TreeMap<Object, Object> sortedMap) {
         return new TriviaScreenshot(templateFile, fontFile, leadersTitle,
                 sortedMap, mainSize, dateSize, limit, topOffset, bottomOffset,
                 triviaScreenshotFilename);
@@ -537,10 +588,10 @@ public class Trivia {
      * @return TreeMap with each user and their score for those who answered at
      *         least one answer correctly
      */
-	private TreeMap<String, Integer> generateLeaderboard() {
+	public TreeMap<Object, Object> generateLeaderboard() {
 		logger.info("Creating leaderboard");
 		GameComparator scoreComparator = new GameComparator(scoreMap);
-		TreeMap<String, Integer> sortedMap = new TreeMap<>(
+		TreeMap<Object, Object> sortedMap = new TreeMap<>(
 				scoreComparator);
 		sortedMap.putAll(scoreMap);
 		return sortedMap;
@@ -553,12 +604,10 @@ public class Trivia {
      *
      * @param answer        question's correct answer, as given
      * @param response      string submitted by user as the answer
-     * @param screenName    user who submitted the response
      * @return              true if response is close enough to the answer to
      *                      be correct
      */
-	private boolean checkAnswer(String answer, String response,
-			String screenName) {
+	public boolean checkAnswer(String answer, String response) {
 		logger.info("Checking answer (" + answer + ") and response ("
 				+ response + ")");
 		if (answer == null || response == null)
@@ -608,25 +657,28 @@ public class Trivia {
 			break;
 		default:
 			isCorrect = true;
-			if ((isLightning && winners.isEmpty())
-					|| (isBonus && winners.isEmpty())
-					|| (!winners.contains(screenName) && winners.size() < 3)) {
-				Integer userScore = scoreMap.get(screenName);
-				int pointsEarned = currScore
-						- (winners.size() * (currScore / 4));
-				winners.add(screenName);
-				if (userScore == null) {
-                    scoreMap.put(screenName, pointsEarned);
-                }
-				else {
-                    scoreMap.put(screenName, userScore + pointsEarned);
-                }
-				logger.info("Adding " + screenName + " to winners");
-			}
 			break;
 		}
 		return isCorrect;
 	}
+
+    public void updateWinners(String screenName) {
+        if ((isLightning && winners.isEmpty())
+                || (isBonus && winners.isEmpty())
+                || (!winners.contains(screenName) && winners.size() < 3)) {
+            Integer userScore = (Integer) scoreMap.get(screenName);
+            int pointsEarned = currScore
+                    - (winners.size() * (currScore / 4));
+            winners.add(screenName);
+            if (userScore == null) {
+                scoreMap.put(screenName, pointsEarned);
+            }
+            else {
+                scoreMap.put(screenName, userScore + pointsEarned);
+            }
+            logger.info("Adding " + screenName + " to winners");
+        }
+    }
 
     /**
      * Use number to word conversions and comparisons to equal answers to
@@ -636,7 +688,7 @@ public class Trivia {
      * @param response  the response string to massage
      * @return          either the answer or response converted to check again
      */
-	private String reCheck(String answer, String response) {
+	public String reCheck(String answer, String response) {
 		logger.info("Running recheck on response (" + answer + ":" + response
 				+ ")");
 		Pattern p = Pattern.compile("-?\\d+");
@@ -806,7 +858,7 @@ public class Trivia {
      * @param level         if greater than 0, only fetch greater than 0 level
      * @return              list of questions given the parameters
      */
-	private List<Question> getQuestions(boolean prioritize, boolean lightning,
+	public List<Question> getQuestions(boolean prioritize, boolean lightning,
             boolean reset, int limit, int skip, int level) {
 		logger.info("Getting question (prioritize: " + prioritize
 				+ ", lightning: " + lightning + ", reset: " + reset
@@ -839,8 +891,12 @@ public class Trivia {
                         "%3A%7B%22%24exists%22%3Afalse%7D%7D%5D%7D");
             }
         }
-        return jsonUtil.getQuestionResults(parse.get("Question", query))
-                .getResults();
+        String responseString = parse.get("Question", query);
+        if (responseString != null) {
+            return jsonUtil.getQuestionResults(responseString)
+                    .getResults();
+        }
+        return new ArrayList<>(0);
 	}
 
     /**
@@ -881,9 +937,11 @@ public class Trivia {
 			}
 		}
 		String responseString = parse.get("Question", query);
-		Count count = jsonUtil.getCount(responseString);
-        if (count != null) {
-            return count.getCount();
+        if (responseString != null) {
+            Count count = jsonUtil.getCount(responseString);
+            if (count != null) {
+                return count.getCount();
+            }
         }
         return -1;
 	}
