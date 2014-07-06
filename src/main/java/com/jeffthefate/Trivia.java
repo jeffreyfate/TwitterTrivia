@@ -1,9 +1,6 @@
 package com.jeffthefate;
 
-import com.jeffthefate.utils.EnglishNumberToWords;
-import com.jeffthefate.utils.GameComparator;
-import com.jeffthefate.utils.Parse;
-import com.jeffthefate.utils.TwitterUtil;
+import com.jeffthefate.utils.*;
 import com.jeffthefate.utils.json.Count;
 import com.jeffthefate.utils.json.JsonUtil;
 import com.jeffthefate.utils.json.Question;
@@ -44,7 +41,7 @@ public class Trivia {
 	private HashMap<String, String> acronymMap;
 	private ArrayList<String> replaceList;
     private static List<String> winners = new ArrayList<>(0);
-    private Map<Object, Object> scoreMap = new HashMap<>();
+    private HashMap<Object, Object> scoreMap = new HashMap<>();
     private static int currScore = 0;
 	private static String currAnswer;
 	private static List<Long> currTwitterStatus = new ArrayList<>(0);
@@ -74,6 +71,9 @@ public class Trivia {
 	private HashMap<String, Long> responseMap = new HashMap<>();
 	private ArrayList<String> tipList;
 
+    private String scoresFile;
+    private String lastScores;
+
 	private String preTweet;
 
 	private int lightningCount;
@@ -95,14 +95,17 @@ public class Trivia {
     private Parse parse;
     private JsonUtil jsonUtil = JsonUtil.instance();
     private TwitterUtil twitterUtil = TwitterUtil.instance();
+    private GameUtil gameUtil = GameUtil.instance();
+    private FileUtil fileUtil = FileUtil.instance();
 
-	public Trivia(String templateFile, String fontFile, String leadersTitle,
+    public Trivia(String templateFile, String fontFile, String leadersTitle,
 			int mainSize, int dateSize, int limit, int topOffset,
             int bottomOffset, Configuration twitterConfig, int questionCount,
             int bonusCount, ArrayList<ArrayList<String>> nameMap,
 			HashMap<String, String> acronymMap, ArrayList<String> replaceList,
 			ArrayList<String> tipList, boolean isDev, String preTweet,
-			int lightningCount, String triviaScreenshotFilename, Parse parse) {
+			int lightningCount, String triviaScreenshotFilename, Parse parse,
+            String scoresFile) {
 		this.templateFile = templateFile;
 		this.fontFile = fontFile;
 		this.leadersTitle = leadersTitle;
@@ -123,6 +126,7 @@ public class Trivia {
 		this.lightningCount = lightningCount;
         this.triviaScreenshotFilename = triviaScreenshotFilename;
         this.parse = parse;
+        this.scoresFile = scoresFile;
 	}
 
 	private class Message {
@@ -160,7 +164,7 @@ public class Trivia {
         return scoreMap;
     }
 
-    public void setScoreMap(Map<Object, Object> scoreMap) {
+    public void setScoreMap(HashMap<Object, Object> scoreMap) {
         this.scoreMap = scoreMap;
     }
 
@@ -196,6 +200,16 @@ public class Trivia {
         Trivia.currScore = currScore;
     }
 
+    public String getScoresFile() {
+        return scoresFile;
+    }
+
+    public void setScoresFile(String scoresFile, String lastScores) {
+        this.scoresFile = scoresFile;
+        this.lastScores = lastScores;
+        fileUtil.writeStringToFile(scoresFile, lastScores);
+    }
+
     /**
      * Begin a trivia game. Clears all information from previous games. Sends
      * tip tweets if there is a pre-show time allotted. Cycles through questions
@@ -217,6 +231,7 @@ public class Trivia {
 		inTrivia = false;
 		usersMap.clear();
 		scoreMap.clear();
+        gameUtil.readScores(scoresFile);
 		winners.clear();
 
 		totalQuestions = 0;
@@ -289,6 +304,7 @@ public class Trivia {
 		if (count <= 50 && count >= 0) {
 			markAllAsTriviaInBackground();
 		}
+        fileUtil.writeStringToFile("", lastScores);
 	}
 
     /**
@@ -666,6 +682,7 @@ public class Trivia {
             else {
                 scoreMap.put(screenName, userScore + pointsEarned);
             }
+            gameUtil.saveScores(scoresFile, scoreMap, twitterConfig);
             logger.info("Adding " + screenName + " to winners");
         }
     }

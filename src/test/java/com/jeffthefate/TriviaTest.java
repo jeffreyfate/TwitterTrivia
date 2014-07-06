@@ -31,7 +31,7 @@ public class TriviaTest extends TestCase {
                 gameUtil.setupAnswerList(), gameUtil.createAcronymMap(),
                 gameUtil.createReplaceList(), gameUtil.createTipList(),
                 true, "Game starts on @dmbtrivia2 in 15 minutes", 0,
-                "/home/TEMP/scores", parse);
+                "/home/TEMP/scores", parse, "D:\\triviaScores.ser");
     }
 
     public void testMassageResponse() {
@@ -49,7 +49,7 @@ public class TriviaTest extends TestCase {
     }
 
     public void testGenerateLeaderboard() {
-        Map<Object, Object> scoreMap = new HashMap<>();
+        HashMap<Object, Object> scoreMap = new HashMap<>();
         scoreMap.put("testUser01", 50000000);
         scoreMap.put("testUser02", 10);
         scoreMap.put("testUser03", -1);
