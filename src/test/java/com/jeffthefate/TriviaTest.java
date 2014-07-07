@@ -177,4 +177,13 @@ public class TriviaTest extends TestCase {
         assertEquals("Not expected number of questions!", 1, questions.size());
     }
 
+    public void testGetQuestion() {
+        ArrayList<Question> questionList = trivia.getQuestion(true);
+        assertEquals("More or fewer than one question returned!", 1,
+                questionList.size());
+        questionList = trivia.getQuestion(false);
+        assertEquals("More or fewer than one question returned!", 1,
+                questionList.size());
+    }
+
 }

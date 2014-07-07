@@ -12,7 +12,6 @@ import twitter4j.conf.Configuration;
 import java.io.File;
 import java.util.*;
 import java.util.Map.Entry;
-import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -89,6 +88,9 @@ public class Trivia {
 	private Timer timer = new Timer();
 
 	Map<String, Integer> usersMap = new HashMap<>();
+
+    private ArrayList<Question> lightningQuestions;
+    private ArrayList<Question> normalQuestions;
 
 	private static Logger logger = Logger.getLogger(Trivia.class);
 
@@ -275,18 +277,19 @@ public class Trivia {
 		logger.info("Lightning start question: " + lightningRound);
 		roundTwo = lightningRound + lightningCount;
 		logger.info("Round 2 start question: " + roundTwo);
+        // Get questions up front
+        // Get lightning questions, if any
+        lightningQuestions = getQuestionList(true, lightningCount);
+        // Get all other questions
+        normalQuestions = getQuestionList(true, questionCount - lightningCount);
 		boolean success;
 		for (int i = 0; i < questionCount; i++) {
 			logger.info("QUESTION " + (i + 1));
 			synchronized (message) {
-				do {
-                    try {
-                        TimeUnit.SECONDS.sleep(1);
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
-					success = askQuestion();
-				} while (!success);
+                success = askQuestion(null);
+                while (!success) {
+                    success = askQuestion(getQuestion(isLightning).get(0));
+                }
 				try {
 					message.wait();
 				} catch (InterruptedException e) {
@@ -738,55 +741,68 @@ public class Trivia {
 		return null;
 	}
 
+    public ArrayList<Question> getQuestionList(boolean isLightning,
+            int reqCount) {
+        ArrayList<Question> questionList = new ArrayList<>(0);
+        while (questionList.size() < reqCount) {
+            questionList.addAll(getQuestion(isLightning));
+        }
+        return questionList;
+    }
+
+    public ArrayList<Question> getQuestion(boolean isLightning) {
+        // Every 3rd question, pick one that is totally random out of
+        // New, Prioritized, Normal
+        // Other 2 questions are one that is randomly chosen from
+        // New, Prioritized
+        boolean prioritize = true;
+        switch (((int) (3 * Math.random()))) {
+            case 0:
+                prioritize = false;
+                break;
+            default:
+                break;
+        }
+        int count = getQuestionCount(prioritize, isLightning, 0);
+        logger.info("Question count: " + count);
+        switch (count) {
+            case -1:
+                // Failure in getting questions
+                logger.warn("Failure getting question count - need to retry");
+                return new ArrayList<Question>(0);
+            case 0:
+                // Should get at least one back, otherwise there are none left and
+                // all 1s should be marked as 0s
+                logger.warn("No questions left!");
+                if (!prioritize && !isDev) {
+                    markAllAsTrivia(1, true);
+                }
+                return new ArrayList<Question>(0);
+        }
+        int skip = ((int) (count * Math.random()));
+        return getQuestions(prioritize, isLightning, false, 1, skip, 0);
+
+    }
+
     /**
      * Find a question to ask, ask it and wait for responses.
      *
      * @return true if everything is successful
      */
-	public boolean askQuestion() {
+	public boolean askQuestion(Question question) {
 		logger.info("Asking question");
 		responseMap.clear();
 		responseMap = new HashMap<>();
-		Question question;
 		StringBuilder sb;
-		// Every 3rd question, pick one that is totally random out of
-		// New, Prioritized, Normal
-		// Other 2 questions are one that is randomly chosen from
-		// New, Prioritized
-		boolean prioritize = true;
-		switch (((int) (3 * Math.random()))) {
-		case 0:
-			prioritize = false;
-			break;
-		default:
-			break;
-		}
-		int count = getQuestionCount(prioritize, isLightning, 0);
-		logger.info("Question count: " + count);
-		switch (count) {
-		case -1:
-			// Failure in getting questions
-			logger.warn("Failure getting question count - need to retry");
-			return false;
-		case 0:
-			// Should get at least one back, otherwise there are none left and
-			// all 1s should be marked as 0s
-			logger.warn("No questions left!");
-			if (!prioritize && !isDev) {
-				markAllAsTrivia(1, true);
-				return false;
-			} else {
-				return false;
-			}
-		}
-		int skip = ((int) (count * Math.random()));
-		List<Question> questionList = getQuestions(prioritize,
-                isLightning, false, 1, skip, 0);
-		if (!questionList.isEmpty()) {
-			question = questionList.get(0);
-		} else {
-			return false;
-		}
+        if (question == null) {
+            if (isLightning && !lightningQuestions.isEmpty()) {
+                question = lightningQuestions.remove(0);
+            } else if (normalQuestions.isEmpty()) {
+                return false;
+            } else {
+                question = normalQuestions.remove(0);
+            }
+        }
 		if (question == null || question.getObjectId() == null) {
 			return false;
 		}
@@ -865,8 +881,8 @@ public class Trivia {
      * @param level         if greater than 0, only fetch greater than 0 level
      * @return              list of questions given the parameters
      */
-	public List<Question> getQuestions(boolean prioritize, boolean lightning,
-            boolean reset, int limit, int skip, int level) {
+	public ArrayList<Question> getQuestions(boolean prioritize,
+            boolean lightning, boolean reset, int limit, int skip, int level) {
 		logger.info("Getting question (prioritize: " + prioritize
 				+ ", lightning: " + lightning + ", reset: " + reset
 				+ ", limit: " + limit + ", skip: " + skip);
@@ -900,8 +916,8 @@ public class Trivia {
         }
         String responseString = parse.get("Question", query);
         if (responseString != null) {
-            return jsonUtil.getQuestionResults(responseString)
-                    .getResults();
+            return new ArrayList<Question>(jsonUtil.getQuestionResults(
+                    responseString).getResults());
         }
         return new ArrayList<>(0);
 	}
