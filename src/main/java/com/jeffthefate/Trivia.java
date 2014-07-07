@@ -769,7 +769,7 @@ public class Trivia {
             case -1:
                 // Failure in getting questions
                 logger.warn("Failure getting question count - need to retry");
-                return new ArrayList<Question>(0);
+                return new ArrayList<>(0);
             case 0:
                 // Should get at least one back, otherwise there are none left and
                 // all 1s should be marked as 0s
@@ -777,7 +777,7 @@ public class Trivia {
                 if (!prioritize && !isDev) {
                     markAllAsTrivia(1, true);
                 }
-                return new ArrayList<Question>(0);
+                return new ArrayList<>(0);
         }
         int skip = ((int) (count * Math.random()));
         return getQuestions(prioritize, isLightning, false, 1, skip, 0);
@@ -916,7 +916,7 @@ public class Trivia {
         }
         String responseString = parse.get("Question", query);
         if (responseString != null) {
-            return new ArrayList<Question>(jsonUtil.getQuestionResults(
+            return new ArrayList<>(jsonUtil.getQuestionResults(
                     responseString).getResults());
         }
         return new ArrayList<>(0);
