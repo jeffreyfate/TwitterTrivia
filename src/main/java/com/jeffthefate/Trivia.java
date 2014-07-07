@@ -418,16 +418,6 @@ public class Trivia {
 		String answer = massageAnswer(currAnswer);
 		logger.info("Massaged answer: " + answer);
 		// Get the diff characters between the answer and the response
-		if ((answer.startsWith("19") || answer.startsWith("20")) &&
-				answer.length() >= 4 &&
-				(!response.startsWith("19") || !response.startsWith("20"))) {
-			response = answer.substring(0, 2) + response;
-		}
-		else if ((response.startsWith("19") || response.startsWith("20")) &&
-				response.length() >= 4 &&
-				(!answer.startsWith("19") || !answer.startsWith("20"))) {
-			answer = response.substring(0, 2) + answer;
-		}
 		boolean isCorrect = checkAnswer(answer, response);
 		if (!isCorrect) {
 			logger.info("Not correct, rechecking");
