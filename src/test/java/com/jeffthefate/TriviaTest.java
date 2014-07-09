@@ -3,7 +3,7 @@ package com.jeffthefate;
 import com.jeffthefate.utils.CredentialUtil;
 import com.jeffthefate.utils.GameUtil;
 import com.jeffthefate.utils.Parse;
-import com.jeffthefate.utils.json.Question;
+import com.jeffthefate.utils.json.parse.Question;
 import junit.framework.TestCase;
 
 import java.io.File;
@@ -28,8 +28,9 @@ public class TriviaTest extends TestCase {
                 new File("src/test/resources/roboto.ttf").getAbsolutePath(),
                 "Top Scores", 45, 22, 10, 200, 100,
                 credentialUtil.getCredentialedTwitter(parse, true), 0, 0,
-                gameUtil.setupAnswerList(), gameUtil.createAcronymMap(),
-                gameUtil.createReplaceList(), gameUtil.createTipList(),
+                gameUtil.setupAnswerList(true, "D:\\parseCreds"),
+                gameUtil.createReplaceList(true, "D:\\parseCreds"),
+                gameUtil.createTriviaTipList(true, "D:\\parseCreds"),
                 true, "Game starts on @dmbtrivia2 in 15 minutes", 0,
                 "/home/TEMP/scores", parse, "D:\\triviaScores.ser");
     }

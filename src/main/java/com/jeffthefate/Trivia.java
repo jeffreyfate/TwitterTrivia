@@ -1,9 +1,9 @@
 package com.jeffthefate;
 
 import com.jeffthefate.utils.*;
-import com.jeffthefate.utils.json.Count;
 import com.jeffthefate.utils.json.JsonUtil;
-import com.jeffthefate.utils.json.Question;
+import com.jeffthefate.utils.json.parse.Count;
+import com.jeffthefate.utils.json.parse.Question;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.log4j.Logger;
 import twitter4j.Status;
@@ -37,7 +37,6 @@ public class Trivia {
 	private static final int BONUS_SCORE = 1000;
 
 	private ArrayList<ArrayList<String>> nameMap;
-	private HashMap<String, String> acronymMap;
 	private ArrayList<String> replaceList;
     private static List<String> winners = new ArrayList<>(0);
     private HashMap<Object, Object> scoreMap = new HashMap<>();
@@ -104,10 +103,9 @@ public class Trivia {
 			int mainSize, int dateSize, int limit, int topOffset,
             int bottomOffset, Configuration twitterConfig, int questionCount,
             int bonusCount, ArrayList<ArrayList<String>> nameMap,
-			HashMap<String, String> acronymMap, ArrayList<String> replaceList,
-			ArrayList<String> tipList, boolean isDev, String preTweet,
-			int lightningCount, String triviaScreenshotFilename, Parse parse,
-            String scoresFile) {
+            ArrayList<String> replaceList, ArrayList<String> tipList,
+            boolean isDev, String preTweet, int lightningCount,
+            String triviaScreenshotFilename, Parse parse, String scoresFile) {
 		this.templateFile = templateFile;
 		this.fontFile = fontFile;
 		this.leadersTitle = leadersTitle;
@@ -120,7 +118,6 @@ public class Trivia {
 		this.questionCount = questionCount;
 		this.bonusCount = bonusCount;
 		this.nameMap = nameMap;
-		this.acronymMap = acronymMap;
 		this.replaceList = replaceList;
 		this.tipList = tipList;
 		this.isDev = isDev;
@@ -729,15 +726,11 @@ public class Trivia {
 		}
 		logger.info("Looking through name map for matching answer");
 		for (ArrayList<String> list : nameMap) {
-			if (list.contains(answer) && list.contains(response)) {
-				logger.info("Found match for " + response + " and " + answer);
-				return answer;
-			}
-		}
-		logger.info("Looking through acronym map for matching answer");
-		if (acronymMap.containsKey(response)) {
-			return acronymMap.get(response);
-		}
+            if (list.contains(answer) && list.contains(response)) {
+                logger.info("Found match for " + response + " and " + answer);
+                return answer;
+            }
+        }
 		return null;
 	}
 
