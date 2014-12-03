@@ -21,18 +21,16 @@ public class TriviaTest extends TestCase {
         super.setUp();
         CredentialUtil credentialUtil = CredentialUtil.instance();
         gameUtil = GameUtil.instance();
-        Parse parse = credentialUtil.getCredentialedParse(true,
-                "D:\\parseCreds");
+        Parse parse = credentialUtil.getCredentialedParse(true, "parseCreds");
         trivia = new Trivia(
                 new File("src/test/resources/setlist.jpg").getAbsolutePath(),
                 new File("src/test/resources/roboto.ttf").getAbsolutePath(),
                 "Top Scores", 45, 22, 10, 200, 100,
-                credentialUtil.getCredentialedTwitter(parse, true), 0, 0,
-                gameUtil.setupAnswerList(true, "D:\\parseCreds"),
-                gameUtil.createReplaceList(true, "D:\\parseCreds"),
-                gameUtil.createTriviaTipList(true, "D:\\parseCreds"),
-                true, "Game starts on @dmbtrivia2 in 15 minutes", 0,
-                "/home/TEMP/scores", parse, "D:\\triviaScores.ser");
+                credentialUtil.getCredentialedTwitter(parse, true), 10, 3,
+                gameUtil.setupAnswerList(true, "parseCreds"),
+                gameUtil.createReplaceList(true, "parseCreds"),
+                gameUtil.createTipList(true, "parseCreds", "TriviaTip"),
+                true, "[DMB Trivia] ", 5, "scores", parse, "triviaScores.ser");
     }
 
     public void testMassageResponse() {
@@ -160,31 +158,63 @@ public class TriviaTest extends TestCase {
 
     public void testGetQuestions() {
         List<Question> questions = trivia.getQuestions(true, true, true, 1,
-                1, 1);
+                1, 1, null);
         assertEquals("Not expected number of questions!", 1, questions.size());
-        questions = trivia.getQuestions(false, true, true, 1, 1, 1);
+        questions = trivia.getQuestions(false, true, true, 1, 1, 1, null);
         assertEquals("Not expected number of questions!", 1, questions.size());
-        questions = trivia.getQuestions(false, false, true, 1, 1, 1);
+        questions = trivia.getQuestions(false, false, true, 1, 1, 1, null);
         assertEquals("Not expected number of questions!", 0, questions.size());
-        questions = trivia.getQuestions(false, false, false, 1, 1, 1);
+        questions = trivia.getQuestions(false, false, false, 1, 1, 1, null);
         assertEquals("Not expected number of questions!", 0, questions.size());
-        questions = trivia.getQuestions(true, false, true, 1, 1, 1);
+        questions = trivia.getQuestions(true, false, true, 1, 1, 1, null);
         assertEquals("Not expected number of questions!", 0, questions.size());
-        questions = trivia.getQuestions(true, false, false, 1, 1, 1);
+        questions = trivia.getQuestions(true, false, false, 1, 1, 1, null);
         assertEquals("Not expected number of questions!", 0, questions.size());
-        questions = trivia.getQuestions(true, true, false, 1, 1, 1);
+        questions = trivia.getQuestions(true, true, false, 1, 1, 1, null);
         assertEquals("Not expected number of questions!", 1, questions.size());
-        questions = trivia.getQuestions(false, true, false, 1, 1, 1);
+        questions = trivia.getQuestions(false, true, false, 1, 1, 1, null);
         assertEquals("Not expected number of questions!", 1, questions.size());
     }
 
     public void testGetQuestion() {
-        ArrayList<Question> questionList = trivia.getQuestion(true);
-        assertEquals("More or fewer than one question returned!", 1,
-                questionList.size());
-        questionList = trivia.getQuestion(false);
-        assertEquals("More or fewer than one question returned!", 1,
-                questionList.size());
+        Question question = trivia.getQuestion(true, null);
+        assertNotNull("Question is null!", question);
+        question = trivia.getQuestion(false, null);
+        assertNotNull("Question is null!", question);
+    }
+
+    public void testStartTrivia() {
+        trivia.setQuestionCount(20);
+        trivia.setLightningCount(4);
+        trivia.setBonusCount(4);
+        //trivia.startTrivia(false, "", 0);
+    }
+
+    public void testCreateLightningJsonString() {
+        ArrayList<String> testList = new ArrayList<>(0);
+        testList.add("testId1");
+        testList.add("testId2");
+        System.out.println(trivia.createLightningJsonString(testList));
+    }
+
+    public void testAskQuestion() {
+        trivia.setCurrQuestion(null);
+        assertFalse(trivia.askQuestion(true));
+        assertNull(trivia.getCurrQuestion());
+        assertFalse(trivia.askQuestion(false));
+        assertNull(trivia.getCurrQuestion());
+        trivia.setCurrQuestion(trivia.getQuestion(false, new ArrayList<String>(0)));
+        assertFalse(trivia.askQuestion(true));
+        assertNotNull(trivia.getCurrQuestion());
+        trivia.setCurrQuestion(trivia.getQuestion(false, new ArrayList<String>(0)));
+        assertTrue(trivia.askQuestion(false));
+        assertNull(trivia.getCurrQuestion());
+        trivia.setCurrQuestion(trivia.getQuestion(true, new ArrayList<String>(0)));
+        assertFalse(trivia.askQuestion(true));
+        assertNotNull(trivia.getCurrQuestion());
+        trivia.setCurrQuestion(trivia.getQuestion(true, new ArrayList<String>(0)));
+        assertTrue(trivia.askQuestion(false));
+        assertNull(trivia.getCurrQuestion());
     }
 
 }
