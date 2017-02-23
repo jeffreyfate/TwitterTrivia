@@ -1,8 +1,8 @@
 package com.jeffthefate;
 
+import com.jeffthefate.utils.Backendless;
 import com.jeffthefate.utils.EnglishNumberToWords;
 import com.jeffthefate.utils.GameComparator;
-import com.jeffthefate.utils.Parse;
 import com.jeffthefate.utils.TwitterUtil;
 import com.jeffthefate.utils.json.Count;
 import com.jeffthefate.utils.json.JsonUtil;
@@ -92,7 +92,7 @@ public class Trivia {
 
 	private static Logger logger = Logger.getLogger(Trivia.class);
 
-    private Parse parse;
+    private Backendless backendless;
     private JsonUtil jsonUtil = JsonUtil.instance();
     private TwitterUtil twitterUtil = TwitterUtil.instance();
 
@@ -102,7 +102,7 @@ public class Trivia {
             int bonusCount, ArrayList<ArrayList<String>> nameMap,
 			HashMap<String, String> acronymMap, ArrayList<String> replaceList,
 			ArrayList<String> tipList, boolean isDev, String preTweet,
-			int lightningCount, String triviaScreenshotFilename, Parse parse) {
+			int lightningCount, String triviaScreenshotFilename, Backendless backendless) {
 		this.templateFile = templateFile;
 		this.fontFile = fontFile;
 		this.leadersTitle = leadersTitle;
@@ -122,7 +122,7 @@ public class Trivia {
 		this.preTweet = preTweet;
 		this.lightningCount = lightningCount;
         this.triviaScreenshotFilename = triviaScreenshotFilename;
-        this.parse = parse;
+        this.backendless = backendless;
 	}
 
 	private class Message {
@@ -818,7 +818,7 @@ public class Trivia {
 			}
 			if (status != null) {
 				if (!isDev) {
-                    parse.markAsTrivia(question.getObjectId(), 0);
+                    backendless.markAsTrivia(question.getObjectId(), 0);
 				}
 				currTwitterStatus.add(status.getId());
 			}
@@ -881,7 +881,7 @@ public class Trivia {
                         "%3A%7B%22%24exists%22%3Afalse%7D%7D%5D%7D");
             }
         }
-        String responseString = parse.get("Question", query);
+        String responseString = backendless.get("Question", query);
         if (responseString != null) {
             return jsonUtil.getQuestionResults(responseString)
                     .getResults();
@@ -926,7 +926,7 @@ public class Trivia {
                         "%3A%7B%22%24exists%22%3Afalse%7D%7D%5D%7D");
 			}
 		}
-		String responseString = parse.get("Question", query);
+		String responseString = backendless.get("Question", query);
         if (responseString != null) {
             Count count = jsonUtil.getCount(responseString);
             if (count != null) {
@@ -961,7 +961,7 @@ public class Trivia {
                             continue;
                         }
                     }
-                    parse.markAsTrivia(question.getObjectId(), level);
+                    backendless.markAsTrivia(question.getObjectId(), level);
 				}
 			}
 		} while (!questionList.isEmpty());
