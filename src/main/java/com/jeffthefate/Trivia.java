@@ -1,22 +1,30 @@
 package com.jeffthefate;
 
-import com.jeffthefate.utils.*;
+import com.jeffthefate.utils.Backendless;
+import com.jeffthefate.utils.EnglishNumberToWords;
+import com.jeffthefate.utils.FileUtil;
+import com.jeffthefate.utils.GameComparator;
+import com.jeffthefate.utils.GameUtil;
+import com.jeffthefate.utils.TwitterUtil;
 import com.jeffthefate.utils.json.JsonUtil;
-import com.jeffthefate.utils.json.parse.Count;
-import com.jeffthefate.utils.json.parse.Question;
+import com.jeffthefate.utils.json.backendless.Question;
+import com.jeffthefate.utils.json.backendless.QuestionData;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.log4j.Logger;
-import org.codehaus.jackson.node.ArrayNode;
-import org.codehaus.jackson.node.JsonNodeFactory;
-import org.codehaus.jackson.node.ObjectNode;
 import twitter4j.Status;
 import twitter4j.conf.Configuration;
 
 import java.io.File;
-import java.io.UnsupportedEncodingException;
-import java.net.URLEncoder;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Timer;
+import java.util.TimerTask;
+import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -107,19 +115,19 @@ public class Trivia {
 
 	private static Logger logger = Logger.getLogger(Trivia.class);
 
-    private Parse parse;
+    private Backendless backendless;
     private JsonUtil jsonUtil = JsonUtil.instance();
     private TwitterUtil twitterUtil = TwitterUtil.instance();
     private GameUtil gameUtil = GameUtil.instance();
     private FileUtil fileUtil = FileUtil.instance();
 
     public Trivia(String templateFile, String fontFile, String leadersTitle,
-			int mainSize, int dateSize, int limit, int topOffset,
-            int bottomOffset, Configuration twitterConfig, int questionCount,
-            int bonusCount, ArrayList<ArrayList<String>> nameMap,
-            ArrayList<String> replaceList, ArrayList<String> tipList,
-            boolean isDev, String preTweet, int lightningCount,
-            String triviaScreenshotFilename, Parse parse, String scoresFile) {
+				  int mainSize, int dateSize, int limit, int topOffset,
+				  int bottomOffset, Configuration twitterConfig, int questionCount,
+				  int bonusCount, ArrayList<ArrayList<String>> nameMap,
+				  ArrayList<String> replaceList, ArrayList<String> tipList,
+				  boolean isDev, String preTweet, int lightningCount,
+				  String triviaScreenshotFilename, Backendless backendless, String scoresFile) {
 		this.templateFile = templateFile;
 		this.fontFile = fontFile;
 		this.leadersTitle = leadersTitle;
@@ -138,7 +146,7 @@ public class Trivia {
 		this.preTweet = preTweet;
 		this.lightningCount = lightningCount;
         this.triviaScreenshotFilename = triviaScreenshotFilename;
-        this.parse = parse;
+        this.backendless = backendless;
         this.scoresFile = scoresFile;
 	}
 
@@ -865,7 +873,7 @@ public class Trivia {
 			}
 			if (status != null && !failWhale) {
 				if (!isDev) {
-                    parse.markAsTrivia(currQuestion.getObjectId(), 0);
+                    backendless.markAsTrivia(currQuestion.getObjectId(), 0);
 				}
 				currTwitterStatus.add(status.getId());
 			}
@@ -896,56 +904,36 @@ public class Trivia {
      * @param level         if greater than 0, only fetch greater than 0 level
      * @return              list of questions given the parameters
      */
-	public ArrayList<Question> getQuestions(boolean prioritize,
-            boolean lightning, boolean reset, int limit, int skip, int level,
-            ArrayList<String> objectIds) {
-		logger.info("Getting question (prioritize: " + prioritize
-				+ ", lightning: " + lightning + ", reset: " + reset
+	public ArrayList<Question> getQuestions(boolean prioritize, boolean lightning, boolean reset, int limit, int skip,
+                                            int level, ArrayList<String> objectIds) {
+		logger.info("Getting question (prioritize: " + prioritize + ", lightning: " + lightning + ", reset: " + reset
 				+ ", limit: " + limit + ", skip: " + skip);
-        String query = "?skip=" + skip + "&limit=" + limit + "&order=updatedAt";
+        String query = "?";
         if (lightning) {
             // Get questions only from Lyrics and Scramble categories
             logger.info("Fetching lyrics or scramble question");
             query += createLightningJsonString(objectIds);
-            /*
-            query += ("&where%3D%7B%22category%22%3A%7B%22%24in%22%3A%5B%22"
-                    + "Lyrics%22%2C%22Scramble%22%5D%7D%7D");
-            */
         } else if (reset) {
-            logger.info("Fetching asked question");
-            query += "&where%3D%7B%22trivia%22%3A0%7D";
+            logger.info("Fetching asked questions");
+            query += "where=trivia%3D0";
         } else if (level > 0) {
             logger.info("Fetching trivia greater than 0");
             query += createLevelJsonString(objectIds, level);
-            /*
-            query += ("&where%3D%7B%22trivia%22%3A%7B%22%24gte%22%3A" + level +
-                    "%7D%7D");
-            */
         } else {
             if (!prioritize) {
                 // Choose from everything but those that are asked
                 logger.info("Fetching any unasked question");
                 query += createUnaskedJsonString(objectIds);
-                /*
-                query += ("&where%3D%7B%22%24or%22%3A%5B%7B%22trivia%22%3A%7B" +
-                        "%22%24exists%22%3Afalse%7D%7D%2C%7B%22trivia%22%3A" +
-                        "%7B%22%24ne%22%3A0%7D%7D%5D%7D");
-                */
             } else {
                 // Choose from only new and prioritized
                 logger.info("Fetching new or prioritized question");
                 query += createNewPrioritizedJsonString(objectIds);
-                /*
-				query += ("&where%3D%7B%22%24or%22%3A%5B%7B%22trivia%22%3A%7B" +
-                        "%22%24nin%22%3A%5B0%2C1%5D%7D%7D%2C%7B%22trivia%22" +
-                        "%3A%7B%22%24exists%22%3Afalse%7D%7D%5D%7D");
-                */
             }
         }
-        String responseString = parse.get("Question", query);
+        query += "&offset=" + skip + "&pageSize=" + limit + "&sortBy=updated";
+        String responseString = backendless.get("Question", query);
         if (responseString != null) {
-            return new ArrayList<>(jsonUtil.getQuestionResults(
-                    responseString).getResults());
+            return new ArrayList<>(jsonUtil.getQuestionData(responseString).getData());
         }
         return new ArrayList<>(0);
 	}
@@ -962,171 +950,71 @@ public class Trivia {
      */
 	private int getQuestionCount(boolean prioritize, boolean lightning,
 			int level, ArrayList<String> objectIds) {
-		String query = "?count=1&limit=0";
+		String query = "?";
 		if (lightning) {
 			// Get questions only from Lyrics and Scramble categories
 			logger.info("Fetching lyrics or scramble count");
             query += createLightningJsonString(objectIds);
-            /*
-			query += ("&where%3D%7B%22category%22%3A%7B%22%24in%22%3A%5B%22"
-					+ "Lyrics%22%2C%22Scramble%22%5D%7D%7D");
-            */
 		} else if (level > 0) {
 			logger.info("Fetching trivia greater than 0");
             query += createLevelJsonString(objectIds, level);
-            /*
-			query += ("&where%3D%7B%22trivia%22%3A%7B%22%24gte%22%3A" + level +
-					"%7D%7D");
-            */
 		} else {
 			if (!prioritize) {
 				// Choose from everything but those that are asked
 				logger.info("Fetching any unasked count");
                 query += createUnaskedJsonString(objectIds);
-                /*
-				query += ("&where%3D%7B%22%24or%22%3A%5B%7B%22trivia%22%3A%7B" +
-                        "%22%24exists%22%3Afalse%7D%7D%2C%7B%22trivia%22%3A" +
-                        "%7B%22%24ne%22%3A0%7D%7D%5D%7D");
-                */
 			} else {
 				// Choose from only new and prioritized
 				logger.info("Fetching new or prioritized count");
                 query += createNewPrioritizedJsonString(objectIds);
-                /*
-				query += ("&where%3D%7B%22%24or%22%3A%5B%7B%22trivia%22%3A%7B" +
-                        "%22%24nin%22%3A%5B0%2C1%5D%7D%7D%2C%7B%22trivia%22" +
-                        "%3A%7B%22%24exists%22%3Afalse%7D%7D%5D%7D");
-                */
 			}
 		}
-		String responseString = parse.get("Question", query);
+		String responseString = backendless.get("Question", query);
         if (responseString != null) {
-            Count count = jsonUtil.getCount(responseString);
-            if (count != null) {
-                return count.getCount();
+            QuestionData questionData = jsonUtil.getQuestionData(responseString);
+            if (questionData != null) {
+                return questionData.getTotalObjects();
             }
         }
         return -1;
 	}
 
-    public String createLightningJsonString(ArrayList<String> entries) {
-        JsonNodeFactory factory = JsonNodeFactory.instance;
-        ObjectNode rootNode = factory.objectNode();
-        ObjectNode categoryQuery = factory.objectNode();
-        ArrayNode categoryArray = factory.arrayNode();
-        categoryArray.add("Lyrics");
-        categoryArray.add("Scramble");
-        categoryQuery.put("$in", categoryArray);
-        rootNode.put("category", categoryQuery);
+	private String createObjectExclusionString(ArrayList<String> entries) {
+	    String query = "";
+
         if (entries != null && !entries.isEmpty()) {
-            ObjectNode objectIdQuery = factory.objectNode();
-            ArrayNode objectIdArray = factory.arrayNode();
+
+            query += "%20AND%20objectId%20not%20in%20(";
+
             for (String entry : entries) {
-                objectIdArray.add(entry);
+                query += "%27";
+                query += entry;
+                query += "%27";
+                query += "%2C";
             }
-            objectIdQuery.put("$nin", objectIdArray);
-            rootNode.put("objectId", objectIdQuery);
+
+            query = query.substring(0, query.lastIndexOf("%2C"));
+
+            query += ")";
         }
-        try {
-            return "&" + URLEncoder.encode("where=" + rootNode.toString(),
-                    "UTF-8");
-        } catch (UnsupportedEncodingException e) {
-            logger.error("Couldn't encode query!", e);
-            return null;
-        }
+
+        return query;
+    }
+
+    public String createLightningJsonString(ArrayList<String> entries) {
+	    return "where=category%20in%20(%27Lyrics%27%2C%27Scramble%27)" + createObjectExclusionString(entries);
     }
 
     public String createLevelJsonString(ArrayList<String> entries, int level) {
-        JsonNodeFactory factory = JsonNodeFactory.instance;
-        ObjectNode rootNode = factory.objectNode();
-        ObjectNode triviaQuery = factory.objectNode();
-        triviaQuery.put("$gte", level);
-        rootNode.put("trivia", triviaQuery);
-        if (entries != null && !entries.isEmpty()) {
-            ObjectNode objectIdQuery = factory.objectNode();
-            ArrayNode objectIdArray = factory.arrayNode();
-            for (String entry : entries) {
-                objectIdArray.add(entry);
-            }
-            objectIdQuery.put("$nin", objectIdArray);
-            rootNode.put("objectId", objectIdQuery);
-        }
-        try {
-            return "&" + URLEncoder.encode("where=" + rootNode.toString(),
-                    "UTF-8");
-        } catch (UnsupportedEncodingException e) {
-            logger.error("Couldn't encode query!", e);
-            return null;
-        }
+	    return "where=trivia%3E" + level + createObjectExclusionString(entries);
     }
 
     public String createUnaskedJsonString(ArrayList<String> entries) {
-        JsonNodeFactory factory = JsonNodeFactory.instance;
-        ObjectNode rootNode = factory.objectNode();
-        ArrayNode orArray = factory.arrayNode();
-        ObjectNode triviaExistsQuery = factory.objectNode();
-        ObjectNode triviaNotZeroQuery = factory.objectNode();
-        ObjectNode notZeroNode = factory.objectNode();
-        notZeroNode.put("$ne", 0);
-        triviaNotZeroQuery.put("trivia", notZeroNode);
-        ObjectNode existsNode = factory.objectNode();
-        existsNode.put("$exists", false);
-        triviaExistsQuery.put("trivia", existsNode);
-        orArray.add(triviaExistsQuery);
-        orArray.add(triviaNotZeroQuery);
-        rootNode.put("$or", orArray);
-        if (entries != null && !entries.isEmpty()) {
-            ObjectNode objectIdQuery = factory.objectNode();
-            ArrayNode objectIdArray = factory.arrayNode();
-            for (String entry : entries) {
-                objectIdArray.add(entry);
-            }
-            objectIdQuery.put("$nin", objectIdArray);
-            rootNode.put("objectId", objectIdQuery);
-        }
-        try {
-            return "&" + URLEncoder.encode("where=" + rootNode.toString(),
-                    "UTF-8");
-        } catch (UnsupportedEncodingException e) {
-            logger.error("Couldn't encode query!", e);
-            return null;
-        }
+	    return "where=(trivia%20is%20null%20OR%20trivia%20!%3D%200)" + createObjectExclusionString(entries);
     }
 
     public String createNewPrioritizedJsonString(ArrayList<String> entries) {
-        JsonNodeFactory factory = JsonNodeFactory.instance;
-        ObjectNode rootNode = factory.objectNode();
-        ArrayNode orArray = factory.arrayNode();
-        ObjectNode triviaExistsQuery = factory.objectNode();
-        ObjectNode triviaPrioritizedQuery = factory.objectNode();
-        ObjectNode notInNode = factory.objectNode();
-        ArrayNode notInArray = factory.arrayNode();
-        notInArray.add(0);
-        notInArray.add(1);
-        notInNode.put("$nin", notInArray);
-        triviaPrioritizedQuery.put("trivia", notInNode);
-        ObjectNode existsNode = factory.objectNode();
-        existsNode.put("$exists", false);
-        triviaExistsQuery.put("trivia", existsNode);
-        orArray.add(triviaExistsQuery);
-        orArray.add(triviaPrioritizedQuery);
-        rootNode.put("$or", orArray);
-        if (entries != null && !entries.isEmpty()) {
-            ObjectNode objectIdQuery = factory.objectNode();
-            ArrayNode objectIdArray = factory.arrayNode();
-            for (String entry : entries) {
-                objectIdArray.add(entry);
-            }
-            objectIdQuery.put("$nin", objectIdArray);
-            rootNode.put("objectId", objectIdQuery);
-        }
-        try {
-            return "&" + URLEncoder.encode("where=" + rootNode.toString(),
-                    "UTF-8");
-        } catch (UnsupportedEncodingException e) {
-            logger.error("Couldn't encode query!", e);
-            return null;
-        }
+	    return "where=(trivia%20is%20null%20OR%20trivia%20not%20in%20(0%2C1))" + createObjectExclusionString(entries);
     }
 
     /**
@@ -1141,10 +1029,11 @@ public class Trivia {
      */
 	private void markAllAsTrivia(int level, boolean resetZero) {
 		logger.info("Setting all questions to " + level);
+		ArrayList<String> idList = new ArrayList<>(0);
 		List<Question> questionList;
 		do {
-			questionList = getQuestions(false, false, true, 1000, 0,
-                    resetZero ? 0 : 1, null);
+			questionList = getQuestions(false, false, true, 100, idList.size(),
+                    resetZero ? 0 : 1, idList);
 			if (!questionList.isEmpty()) {
 				for (Question question : questionList) {
 					if (!resetZero) {
@@ -1154,7 +1043,8 @@ public class Trivia {
                             continue;
                         }
                     }
-                    parse.markAsTrivia(question.getObjectId(), level);
+                    backendless.markAsTrivia(question.getObjectId(), level);
+					idList.add(question.getObjectId());
 				}
 			}
 		} while (!questionList.isEmpty());

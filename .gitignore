@@ -1,3 +1,8 @@
 parseCreds
 *.class
 *.log*
+.idea/
+target/
+.classpath
+.project
+.settings/
