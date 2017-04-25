@@ -334,7 +334,7 @@ public class Trivia {
 		}
 		inTrivia = false;
 		// Start resetting the questions early
-        int count = getQuestionCount(false, false, 1, null);
+        int count = getQuestionCount(false, false, 0, null);
 		if (count <= 50 && count >= 0) {
 			markAllAsTriviaInBackground();
 		}
@@ -771,8 +771,7 @@ public class Trivia {
 		return null;
 	}
 
-    public Question getQuestion(boolean isLightning,
-            ArrayList<String> objectIds) {
+    public Question getQuestion(boolean isLightning, ArrayList<String> objectIds) {
         // Every 3rd question, pick one that is totally random out of
         // New, Prioritized, Normal
         // Other 2 questions are one that is randomly chosen from
@@ -802,8 +801,7 @@ public class Trivia {
                 return null;
         }
         int skip = ((int) (count * Math.random()));
-        ArrayList<Question> questions = getQuestions(prioritize, isLightning,
-                false, 1, skip, 0, objectIds);
+        ArrayList<Question> questions = getQuestions(prioritize, isLightning, false, 1, skip, 0, objectIds);
         if (questions.isEmpty()) {
             return null;
         }
@@ -948,8 +946,7 @@ public class Trivia {
      * @param level         count only questions greater or equal to this level
      * @return              number of questions, filtered by parameters
      */
-	private int getQuestionCount(boolean prioritize, boolean lightning,
-			int level, ArrayList<String> objectIds) {
+	private int getQuestionCount(boolean prioritize, boolean lightning, int level, ArrayList<String> objectIds) {
 		String query = "?";
 		if (lightning) {
 			// Get questions only from Lyrics and Scramble categories
